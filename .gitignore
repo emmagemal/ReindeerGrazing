@@ -38,8 +38,13 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
+# ADDED MYSELF 
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 rsconnect/
 
 # DS_Store file
 *.DS_Store
+
+# RStudio files
+.Rproj.user/
+*.Rproj
