@@ -1,7 +1,7 @@
 ## Data Exploration and Statistics ##
 ## For SU Master's Thesis in Landscape Ecology
 ## Emma Gemal
-## Last updated 9/2/23
+## Last updated 10/2/23
 
 ### Library ----
 library(tidyverse)
@@ -118,41 +118,55 @@ str(coverage)
 
 
 ### Initial Visualizations ----
-ggplot(richness, aes(x = grazing_s, y = richness_plot)) +
+# Richness
+ggplot(richness, aes(x = grazing_s, y = richness_plot)) +   # richness with grazing 
   geom_point()
 
-ggplot(richness, aes(x = grazing_s, y = richness_plot)) +
+ggplot(richness, aes(x = grazing_s, y = richness_plot)) +   # N and S accounted for 
   geom_point(aes(color = aspect)) +
   stat_smooth(method = "lm", aes(color = aspect))
 
-ggplot(richness, aes(x = grazing_s, y = richness_siteT)) +
+ggplot(richness, aes(x = grazing_s, y = richness_siteT)) +   # averaged across the plots
   geom_point()
 
-ggplot(richness, aes(x = grazing_s, y = richness_siteT)) +
+ggplot(richness, aes(x = grazing_s, y = richness_siteT)) +   # averaged and aspect accounted for
   geom_point(aes(color = aspect)) +
   stat_smooth(method = "lm", aes(color = aspect))
 
-ggplot(richness, aes(x = grazing_s, y = rich_group_prop)) +
-  geom_point(aes(color = sp_group)) +
-  stat_smooth(method = "lm", aes(color = sp_group))
-
-ggplot(richness, aes(x = grazing_s, y = rich_group_prop)) +
+ggplot(richness, aes(x = grazing_s, y = rich_group_prop)) +   # how proportions of groups changes
   geom_point(aes(color = sp_group)) +
   stat_smooth(method = "lm", aes(color = sp_group)) +
+  facet_wrap(~sp_group)
+
+ggplot(richness, aes(x = grazing_s, y = rich_group_prop)) +   # aspect accounted for 
+  geom_point(aes(color = sp_group)) +
+  stat_smooth(method = "lm", aes(color = sp_group)) +   
   facet_wrap(~aspect)
 
-ggplot(richness, aes(x = aspect, y = richness_siteT)) +
+ggplot(richness, aes(x = aspect, y = rich_group_prop)) +   # relative species nr for each group 
+  geom_boxplot(aes(fill = sp_group))                       # for N vs. S 
+
+ggplot(richness, aes(x = aspect, y = richness_siteT)) +   # averaged richness N vs. S
   geom_boxplot()
 
-
-ggplot(coverage, aes(x = grazing_s, y = coverage_perc)) +
-  geom_point()
-
-ggplot(coverage, aes(x = grazing_s, y = coverage_perc)) +
+# Coverage
+ggplot(coverage, aes(x = grazing_s, y = coverage_perc)) +  # coverage of groups with grazing 
   geom_point(aes(color = sp_group)) +
-  stat_smooth(method = "lm", aes(color = sp_group))
+  stat_smooth(method = "lm", se = F, aes(color = sp_group))
 
-ggplot(coverage, aes(x = grazing_s, y = coverage_perc)) +
+ggplot(coverage, aes(x = grazing_s, y = coverage_perc)) +  # differences for N vs. S
   geom_point(aes(color = sp_group)) +
-  stat_smooth(method = "lm", aes(color = sp_group)) +
+  stat_smooth(method = "lm", se = F, aes(color = sp_group)) +
   facet_wrap(~aspect)
+
+ggplot(coverage, aes(x = aspect, y = coverage_perc)) +   # coverage differences N vs. S
+  geom_boxplot(aes(fill = sp_group))
+
+# Veg height
+ggplot(coverage, aes(x = grazing_s, y = avg_height)) +  # height with grazing 
+  geom_point() +
+  stat_smooth(method = "lm")
+
+ggplot(coverage, aes(x = grazing_s, y = avg_height)) +   # height of N vs. S plots 
+  geom_point(aes(color = aspect)) +
+  stat_smooth(method = "lm", aes(color = aspect))
