@@ -1,5 +1,5 @@
 site_nr,plot_nr,date,site_cat,plot_rep,avg_height,sp_common,sp_latin,sp_comments,sp_group
-1,1,8/8/22,4S,1,12.8,reindeer lichen ,Lycopodium alpinum,"could be other species, could be multiple",lichen
+1,1,8/8/22,4S,1,12.8,reindeer lichen ,Cladonia rangiferina,"could be other species, could be multiple",lichen
 1,1,8/8/22,4S,1,12.8,cloudberry,Rubus chamaemorus,no berries though,herb
 1,1,8/8/22,4S,1,12.8,dwarf birch,Betula nana,,shrub
 1,1,8/8/22,4S,1,12.8,alpine kidney lichen,Nephroma expallidum,,lichen
@@ -1156,7 +1156,6 @@ site_nr,plot_nr,date,site_cat,plot_rep,avg_height,sp_common,sp_latin,sp_comments
 26,76,18/8/22,1N,1,9,lingonberry,Vaccinium vitis-idaea,,shrub
 26,76,18/8/22,1N,1,9,goldenrod,Solidago virgaurea ssp. lapponica,,herb
 26,76,18/8/22,1N,1,9,reindeer lichen ,Cladonia rangiferina,,lichen
-26,76,18/8/22,1N,1,9,wavy hair-grass,Deschampsia flexuosa,,grass
 26,76,18/8/22,1N,1,9,Wettstein's eyebright,Euphrasia wettsteinii,"from plot nr 65, I think it's kärrögontröst",herb
 26,76,18/8/22,1N,1,9,common haircap moss,Polytrichum commune,,moss
 26,76,18/8/22,1N,1,9,alpine bistort,Bistorta vivipara,"from plot nr 66, leaf of it",herb
