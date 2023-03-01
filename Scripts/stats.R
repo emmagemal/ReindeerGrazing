@@ -11,6 +11,7 @@ library(GGally)  # for 'ggcorr()'
 library(lmtest)
 library(lme4)
 library(vegan)
+library(geosphere)  # for 'mantel()' test 
 
 #### Data Import ----
 sites <- read.csv("Data/site_conditions.csv")
@@ -56,13 +57,16 @@ str(sites)
 
 plots <- plots %>% 
             mutate(date = as.Date(date, format = "%d/%m/%y"),
-                   plot_nr = as.character(plot_nr))
+                   plot_nr = as.character(plot_nr),
+                   site_nr = as.character(site_nr))
 str(plots)
 
 coverage <- coverage %>%  
               mutate(date = as.Date(date, format = "%d/%m/%y"),
                      plot_rep = as.character(plot_rep),
-                     plot_nr = as.character(plot_nr))
+                     plot_nr = as.character(plot_nr),
+                     site_nr = as.character(site_nr)) 
+print(coverage %>% group_by(plot_nr) %>% summarize(sum(coverage_perc)), n = 105)  # all att 100%
 str(coverage) 
 
 # GIS variables
@@ -82,6 +86,7 @@ sort(unique(plots$sp_common))  # remove whitespace after words
 
 sort(unique(plots$sp_latin))  # some don't have a latin name... not good 
                               # remove whitespace after words
+                              # Euphrasia stricta var. tenuis & Euphrasia stricta var. tenius
                               # "Peltigera aphthosa" & "Peltigera apthosa" 
                               # "Pleurozium schereberi" & "Pleurozium schreberi"
                               # "Stereocaulon alpinus" & "Stereocaulon alpinum"
@@ -105,6 +110,8 @@ plots <- plots %>%
             mutate(sp_latin = str_trim(sp_latin, side = "right")) %>% 
             mutate(sp_latin = ifelse(sp_latin == "Peltigera apthosa", "Peltigera aphthosa",
                                      sp_latin),
+                   sp_latin = ifelse(sp_latin == "Euphrasia stricta var. tenius", 
+                                     "Euphrasia stricta var. tenuis", sp_latin),
                    sp_latin = ifelse(sp_latin == "Pleurozium schereberi", "Pleurozium schreberi",
                                      sp_latin),
                    sp_latin = ifelse(sp_latin == "Stereocaulon alpinus", "Stereocaulon alpinum",
@@ -171,13 +178,18 @@ str(coverage)
 
 ## Adding GIS variables to data
 richness <- left_join(richness, gisvar)
-coverage_site <- left_join(coverage_site, gisvar)
+coverage <- left_join(coverage, gisvar)
 
 str(richness)
 str(coverage)
 
 ### Creating summary dataframes ----
 coverage_site <- coverage %>% 
+                    group_by(site_nr) %>% 
+                    mutate(ndvi = mean(ndvi),
+                           slope_deg = mean(slope_deg),
+                           wetness = mean(wetness),
+                           soil_depth = mean(soil_depth)) %>% 
                     group_by(site_nr, sp_group, aspect) %>% 
                     summarize(coverage_cm2 = mean(coverage_cm2),
                               coverage_perc = mean(coverage_perc),
@@ -192,6 +204,11 @@ coverage_site <- as.data.frame(coverage_site)
 str(coverage_site)
 
 richness_site <- richness %>% 
+                    group_by(site_nr) %>% 
+                    mutate(ndvi = mean(ndvi),
+                           slope_deg = mean(slope_deg),
+                           wetness = mean(wetness),
+                           soil_depth = mean(soil_depth)) %>% 
                     group_by(site_nr, sp_group, aspect) %>% 
                     summarise(richness_siteT = mean(richness_siteT),
                               height_site = mean(height_site),
@@ -650,15 +667,15 @@ with(summary(rgawnsd_glm2), 1 - deviance/null.deviance)  # R2 = 0.7346, still im
 # glm(richness_siteT ~ grazing_m * aspect + wetness + ndvi + slope_deg + soil_depth)
 
 summary(rgawnsd_glm2)     ## USE THIS MODEL'S RESULTS ##
-  # grazing NORTH: -0.034060 ± 0.020473, p = 0.0981 (not significant)
-  # grazing SOUTH: 0.147490 ± 0.030176, p = 2.46e-06 (SIGNIFICANT)
-  # wetness: 0.085964 ± 0.008932, p = < 2e-16 (SIGNIFICANT)
-  # ndvi: 20.174700 ± 2.660053, p = 2.57e-12 (SIGNIFICANT)
-  # slope: -0.342612 ± 0.044295, p = 1.09e-12 (SIGNIFICINT)
-  # soil_depth: -0.517907 ± 0.092097, p = 8.16e-08 (SIGNIFICINT)
+  # grazing NORTH: -0.034401 ± 0.020483, p = 0.0981 (not significant)
+  # grazing SOUTH: 0.147290 ± 0.030190, p = 2.56e-06 (SIGNIFICANT)
+  # wetness: 0.086433 ± 0.008993, p = < 2e-16 (SIGNIFICANT)
+  # ndvi: 20.240012 ± 2.678091, p = 2.99e-12 (SIGNIFICANT)
+  # slope: -0.342851 ± 0.044528, p = 1.33e-12 (SIGNIFICANT)
+  # soil_depth: -0.523787 ± 0.092250, p = 6.26e-08 (SIGNIFICANT)
 
 # calculating McFadden's R2 
-with(summary(rgawnsd_glm2), 1 - deviance/null.deviance)  # R2 = 0.7346 (a great model)
+with(summary(rgawnsd_glm2), 1 - deviance/null.deviance)  # R2 = 0.734451 (a great model)
 
 # checking residuals 
 plot(residuals(rgawnsd_glm2) ~ predict(rgawnsd_glm2, type = "response"))  # looks random = good
@@ -1019,13 +1036,13 @@ AIC(hgan4, hganw, hganws, hganw2, hganw3, hganw4, hganw5, hganw6, hganw7, hganw8
 # height_site ~ grazing_m * aspect + ndvi + wetness, family = Gamma(link = log)
 
 summary(hganw2)        ## USE THIS MODEL'S RESULTS ##
-  # grazing NORTH: 2.7^(-0.007457) ± 2.7^(0.004872), p = 0.1278 (not significant)
-  # grazing*aspect SOUTH: 2.7^(0.016497) ± 2.7^(0.007053), p = 0.0206 (SIGNIFICANT)
-  # ndvi: 2.7^(5.517136) ± 2.7^(0.549560), p = < 2e-16 (SIGNIFICANT)
-  # wetness: 2.7^(-0.009430) ± 2.7^(0.001768), p = 3.19e-07 (SIGNIFICANT)
+  # grazing NORTH: 2.7^(-0.007511) ± 2.7^(0.004852), p = 0.124 (not significant)
+  # grazing*aspect SOUTH: 2.7^(0.016494) ± 2.7^(0.007022), p = 0.0200 (SIGNIFICANT)
+  # ndvi: 2.7^(5.541403) ± 2.7^(0.549923), p = < 2e-16 (SIGNIFICANT)
+  # wetness: 2.7^(-0.009523) ± 2.7^(0.001767), p = 2.46e-07 (SIGNIFICANT)
   
 # calculating McFadden's R2 
-with(summary(hganw2), 1 - deviance/null.deviance)  # R2 = 0.6459472 (a good model)
+with(summary(hganw2), 1 - deviance/null.deviance)  # R2 = 0.5331 (a good model)
 
 # checking residuals 
 plot(residuals(hganwsd14) ~ predict(hganwsd14, type = "response")) 
@@ -1189,16 +1206,16 @@ AIC(cga_glm, c_null)
 # glm(coverage_perc ~ grazing_m + sp_group + aspect)
 
 summary(cga_glm)   ## USE THIS MODEL'S RESULTS ##
-  # 6.74757 ± 2.8971, p = 0.0211
-  # grazing: -0.01126 ± 0.12946, p = 0.9308    
-  # herb: -5.14285 ± 3.41962, p = 0.1346    
-  # lichen: 16.96416 ± 3.36667, p = 1.25e-06 (SIGNIFICANT)
-  # moss: 4.72480 ± 3.39244, p = 0.1656    
-  # shrub: 50.38268 ± 3.36667, p = < 2e-16 (SIGNIFICANT)
-  # aspect SOUTH: 0.19833 ± 2.15187, p = 0.9267    
+  # 6.75333 ± 2.9027
+  # grazing: -0.01039 ± 0.1297, p = 0.9363    
+  # herb: -5.14391 ± 3.42615, p = 0.1352    
+  # lichen: 16.96416 ± 3.37309, p = 1.31e-06 (SIGNIFICANT)
+  # moss: 4.7241 ± 3.39892, p = 0.1665    
+  # shrub: 50.31285 ± 3.37309, p = < 2e-16 (SIGNIFICANT)
+  # aspect SOUTH: 0.16916 ± 2.15598, p = 0.9376    
 
 # calculating McFadden's R2 
-with(summary(cga_glm), 1 - deviance/null.deviance)  # R2 = 0.6833 (very good model)
+with(summary(cga_glm), 1 - deviance/null.deviance)  # R2 = 0.6819 (very good model)
 
 # checking residuals 
 plot(residuals(cga_glm) ~ predict(cga_glm, type = "response"))  # a pattern, but due to sp. groups
@@ -1238,6 +1255,7 @@ TukeyHSD(prop_aov)
   # shrub-lichen -0.046470440 -0.090331580 -0.00260930 0.0319417
   # shrub-moss    0.077188689  0.033327549  0.12104983 0.0000275
 
+
 ### Height ~ Aspect
 ha1 <- lm(height_site ~ aspect, data = richness_site)
 shapiro.test(resid(ha1))  # not normal 
@@ -1251,6 +1269,89 @@ richness_site %>% group_by(aspect) %>% summarise(height = mean(height_site),
   # N = 3.39cm ± 0.168
   # S = 4.27cm ± 0.286
 
+
+### Coverage ~ Sp Group + Aspect
+cov_lm <- lm(coverage_perc ~ sp_group, data = coverage_site)
+shapiro.test(resid(cov_lm))  # not normal
+
+# coverage ~ group (overall)
+kruskal.test(coverage_perc ~ sp_group, data = coverage_site)
+  # chi-squared = 117.78, df = 4, p = < 2.2e-16 (SIGNIFICANT)
+
+dunn.test::dunn.test(coverage_site$coverage_perc, coverage_site$sp_group, list = T)
+# diff = COLUMN minus ROW 
+  # grass-herb: diff = 2.8212, p = 0.0024 (SIGNIFICANT)
+  # grass-lichen: diff = -3.9275, p = 0.0000 (SIGNIFICANT)
+  # grass-moss: diff = -2.1323, p = 0.0165 (SIGNIFICANT)
+  # grass-shrub: diff = -7.3885, p = 0.0000 (SIGNIFICANT)
+  # herb-lichen: diff = -6.6886, p = 0.0000 (SIGNIFICANT)
+  # herb-moss: diff = -4.90089, p = 0.0000 (SIGNIFICANT)
+  # herb-shrub: diff = -10.0968, p = 0.0000 (SIGNIFICANT)
+  # lichen-moss: diff = 1.76574, p = 0.0387 (SIGNIFICANT)
+  # lichen-shrub: diff = -3.461, p = 0.0003 (SIGNIFICANT)
+  # moss-shrub: diff = -5.2008, p = 0.0000 (SIGNIFICANT)
+
+# coverage ~ group (NORTH)
+coverageN <- coverage_site %>% filter(aspect == "N")
+kruskal.test(coverage_perc ~ sp_group, data = coverageN)
+# chi-squared = 61.961, df = 4, p = 1.122e-12 (SIGNIFICANT)
+
+dunn.test::dunn.test(coverageN$coverage_perc, coverageN$sp_group, list = T)
+# diff = COLUMN minus ROW 
+  # grass-herb: diff = 2.140144, p = 0.0162 (SIGNIFICANT)
+  # grass-lichen: diff = -2.682129, p = 0.0037 (SIGNIFICANT)
+  # herb-lichen: diff = -4.822274, p = 0.0000 (SIGNIFICANT)
+  # grass-moss: diff = -2.022020, p = 0.0216 (SIGNIFICANT)
+  # herb-moss: diff = -4.162165, p = 0.0000 (SIGNIFICANT)
+  # lichen-moss: diff = 0.660109, p = 0.2546 (not significant)
+  # grass-shrub: diff = -5.218340, p = 0.0000 (SIGNIFICANT)
+  # herb-shrub: diff = -7.358485, p = 0.0000 (SIGNIFICANT)
+  # lichen-shrub: diff = -2.536210, p = 0.0056 (SIGNIFICANT)
+  # moss-shrub: diff = -3.196320, p = 0.0007 (SIGNIFICANT)
+
+# coverage ~ group (SOUTH)
+coverageS <- coverage_site %>% filter(aspect == "S")
+kruskal.test(coverage_perc ~ sp_group, data = coverageS)
+# chi-squared = 55.836, df = 4, p = 2.17e-11 (SIGNIFICANT)
+
+dunn.test::dunn.test(coverageS$coverage_perc, coverageS$sp_group, list = T)
+# diff = COLUMN minus ROW 
+  # grass-herb: diff = 1.861202, p = 0.0314 (SIGNIFICANT)
+  # grass-lichen: diff = -2.822872, p = 0.0024 (SIGNIFICANT)
+  # herb-lichen: diff = -4.594437, p = 0.0000 (SIGNIFICANT)
+  # grass-moss: diff = -1.003856, p = 0.1577 (not significant)
+  # herb-moss: diff = -2.807424, p = 0.0025 (SIGNIFICANT)
+  # lichen-moss: diff = 1.775916, p = 0.0379 (SIGNIFICANT)
+  # grass-shrub: diff = -5.156062, p = 0.0000 (SIGNIFICANT)
+  # herb-shrub: diff = -6.853539, p = 0.0000 (SIGNIFICANT)
+  # lichen-shrub: diff = -2.333190, p = 0.0098 (SIGNIFICANT)
+  # moss-shrub: diff = -4.073483, p = 0.0000 (SIGNIFICANT)
+
+
+# shrub ~ aspect
+s <- coverage_site %>% filter(sp_group == "shrub")
+wilcox.test(coverage_perc ~ aspect, data = s)
+  # W = 116, p = 0.3394
+
+# lichen ~ aspect
+l <- coverage_site %>% filter(sp_group == "lichen")
+wilcox.test(coverage_perc ~ aspect, data = l)
+  # W = 139, p = 0.8651
+
+# moss ~ aspect
+m <- coverage_site %>% filter(sp_group == "moss")
+wilcox.test(coverage_perc ~ aspect, data = m)
+  # W = 199, p = 0.02291 (SIGNIFICANT)
+
+# grass ~ aspect
+g <- coverage_site %>% filter(sp_group == "grass")
+wilcox.test(coverage_perc ~ aspect, data = g)
+  # W = 159, p = 0.6339
+
+# herb
+h <- coverage_site %>% filter(sp_group == "herb")
+wilcox.test(coverage_perc ~ aspect, data = h)
+  # W = 154, p = 0.331 
 
 
 # . ----
@@ -1402,68 +1503,117 @@ for(g in levels(NMDSg$group)){
 ### Dividing coverage across species
 sp_cov <- left_join(plots, coverage)
 sp_cov <- sp_cov %>% 
-            dplyr::select(site_nr, plot_nr, aspect, sp_common, sp_latin, sp_group, coverage_perc) %>% 
+            dplyr::select(site_nr, plot_nr, aspect, sp_latin, sp_group, coverage_perc) %>% 
             group_by(site_nr, plot_nr, sp_group) %>% 
             mutate(rel_abund = coverage_perc/length(sp_group)) %>% 
             ungroup() %>% 
-            na.omit()
+            na.omit() %>% 
+            group_by(site_nr, sp_latin, aspect) %>% 
+            summarize(rel_abund2 = sum(rel_abund)) %>% 
+            mutate(rel_abund2 = ifelse(site_nr == "5", rel_abund2/2, rel_abund2/3)) %>% 
+            ungroup()
 
-print(sp_cov %>% group_by(plot_nr) %>% summarise(sum(rel_abund)), n = 105)  # all = 100%! 
+print(sp_cov %>% group_by(site_nr) %>% summarise(sum(rel_abund2)), n = 105)  # all = 100%! 
 
 ### Making a matrix
 sp_matrix <- sp_cov %>% 
-                dplyr::select(plot_nr, aspect, sp_latin, rel_abund) %>% 
                 distinct() %>% 
-                pivot_wider(names_from = "sp_latin", values_from = "rel_abund", 
+                pivot_wider(names_from = "sp_latin", values_from = "rel_abund2", 
                             values_fill = NA)  # get a warning, but no duplicates found
 
 sp_matrix[is.na(sp_matrix)] <- 0  # making sure non-existent sp just have coverage of 0
 
 # with only coverage data 
-sp_matrix2 <- sp_matrix %>% dplyr::select(!c(plot_nr, aspect)) 
+sp_matrix2 <- sp_matrix %>% 
+                dplyr::select(!c(site_nr, aspect)) 
 
 ### Looking at how many axes to extract 
-set.seed(1)
-mds1b <- metaMDS(sp_matrix2, distance = "bray", k = 1, sratmax = 0.99999)  # no convergence 
-mds2b <- metaMDS(sp_matrix2, distance = "bray", k = 2, sratmax = 0.99999)  # no convergence 
-mds3b <- metaMDS(sp_matrix2, distance = "bray", k = 3, sratmax = 0.99999)  # converged!   
-mds4b <- metaMDS(sp_matrix2, distance = "bray", k = 4, sratmax = 0.99999)  # no convergence 
-mds5b <- metaMDS(sp_matrix2, distance = "bray", k = 5, sratmax = 0.99999)  # no convergence 
-mds6b <- metaMDS(sp_matrix2, distance = "bray", k = 6, sratmax = 0.99999)  # no convergence 
-mds7b <- metaMDS(sp_matrix2, distance = "bray", k = 7, sratmax = 0.99999)  # converged!
-mds8b <- metaMDS(sp_matrix2, distance = "bray", k = 8, sratmax = 0.99999)  # converged! 
-mds9b <- metaMDS(sp_matrix2, distance = "bray", k = 9, sratmax = 0.99999)  # no convergence 
+set.seed(9)
+mds1b <- metaMDS(sp_matrix2, distance = "bray", k = 1, sratmax = 0.99999,    # no convergence
+                 autotransform = F)   
+mds2b <- metaMDS(sp_matrix2, distance = "bray", k = 2, sratmax = 0.99999,    # no convergence
+                 autotransform = F)   
+mds3b <- metaMDS(sp_matrix2, distance = "bray", k = 3, sratmax = 0.99999,    # solution found
+                 autotransform = F) 
+mds4b <- metaMDS(sp_matrix2, distance = "bray", k = 4, sratmax = 0.99999,    # solution found 
+                 autotransform = F)
+  # stress = 0.1256
+mds5b <- metaMDS(sp_matrix2, distance = "bray", k = 5, sratmax = 0.99999,    # solution found?
+                 autotransform = F)    
+  # stress = 0.0976
+mds6b <- metaMDS(sp_matrix2, distance = "bray", k = 6, sratmax = 0.99999,    # solution found 
+                 autotransform = F) 
+  # stress = 0.0798
+mds7b <- metaMDS(sp_matrix2, distance = "bray", k = 7, sratmax = 0.99999,    # solution found 
+                 autotransform = F) 
+  # stress = 0.0654
+mds8b <- metaMDS(sp_matrix2, distance = "bray", k = 8, sratmax = 0.99999,    # solution found
+                 autotransform = F) 
+  # stress = 0.0566
+mds9b <- metaMDS(sp_matrix2, distance = "bray", k = 9, sratmax = 0.99999,    # solution found? 
+                 autotransform = F) 
+mds10b <- metaMDS(sp_matrix2, distance = "bray", k = 10, sratmax = 0.99999,    # no convergence?
+                  autotransform = F)  
 
-# only k = 3, k = 7 and k = 8 converged
+scree <- cbind(rbind(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 
+               rbind(mds1b$stress, mds2b$stress, mds3b$stress, mds4b$stress, mds5b$stress, 
+                     mds6b$stress, mds7b$stress, mds8b$stress, mds9b$stress, mds10b$stress))
+plot(scree)
+  # ~5 or more dimensions = <0.1 stress (which is good)
 
-set.seed(1)
-nmds3 <- metaMDS(sp_matrix2, distance = "bray", k = 3, autotransform = TRUE, trymax = 500, 
-                sratmax = 0.99999) 
-  # stress = ~0.166
-nmds7 <- metaMDS(sp_matrix2, distance = "bray", k = 7, autotransform = TRUE, trymax = 500, 
-                sratmax = 0.99999)  
-  # stress = ~0.0796 (going with this one!)
-nmds8 <- metaMDS(sp_matrix2, distance = "bray", k = 8, autotransform = TRUE, trymax = 500, 
+stressplot(mds5b)   # non-metric fit = 0.996, linear fit = 0.957
+stressplot(mds6b)   # non-metric fit = 0.997, linear fit = 0.972
+stressplot(mds7b)   # non-metric fit = 0.998, linear fit = 0.98
+stressplot(mds8b)   # non-metric fit = 0.999, linear fit = 0.986
+stressplot(mds9b)   # non-metric fit = 0.999, linear fit = 0.99
+
+  # 6 dimensions improves the linear fit quite a bit, then afterwards it tapers off 
+
+# choosing k = 6
+
+set.seed(6)
+nmds6 <- metaMDS(sp_matrix2, distance = "bray", k = 6, autotransform = F, trymax = 500, 
                  sratmax = 0.99999)  
-  # stress = ~0.0692
+  # note that autotransformation is off (default = T) 
 
-### Plotting the NMDS
+nmds6
+  # stress = ~0.05118
+  # 6 dimensions 
+
+
+### Plotting the NMDS ----
+# making a theme
+theme_thesis <- theme_bw() +
+                  theme(panel.grid = element_blank(),
+                        axis.title.x = 
+                          element_text(margin = margin(t = 10, r = 0, b = 0, l = 0)),
+                        axis.title.y = 
+                          element_text(margin = margin(t = 0, r = 10, b = 0, l = 0))) +
+                  theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
+
 # extracting NMDS scores (x and y coordinates)
-data.scoresb <- as.data.frame(scores(nmds7))
-species_scoresb <- as.data.frame(scores(nmds7, "species"))
-species_scoresb$species <- rownames(species_scores)
+data.scoresb <- as.data.frame(scores(nmds6))
+species_scoresb <- as.data.frame(scores(nmds6, "species"))
+species_scoresb$species <- rownames(species_scoresb)
 
 data.scoresb$aspect <- sp_matrix$aspect
 
-## Plotting by aspect ----
-NMDSb <- data.frame(NMDS2 = nmds7$points[,1], NMDS3 = nmds7$points[,2], 
+NMDSb <- data.frame(NMDS1 = nmds6$points[,1], NMDS2 = nmds6$points[,2], 
                     group = data.scoresb$aspect)
 NMDSb$group <- as.factor(NMDSb$group)
 
 NMDSb_mean <- aggregate(NMDSb[,1:2], list(group = NMDSb$group), "mean")
 
-# making the ellipsoids
-ord3 <- ordiellipse(nmds7, data.scoresb$aspect, label = T, conf = 0.95)
+## Making the ellipsoids
+# function for ellipses
+veganCovEllipse <- function (cov, center = c(0, 0), scale = 1, npoints = 100) 
+{
+  theta <- (0:npoints) * 2 * pi/npoints
+  Circle <- cbind(cos(theta), sin(theta))
+  t(center + scale * t(Circle %*% chol(cov)))
+}  # run from here
+
+ord3 <- ordiellipse(nmds6, data.scoresb$aspect, label = T, conf = 0.95)
 
 df_ell3 <- data.frame()   # run from here (this side)
 
@@ -1475,7 +1625,37 @@ for(g in levels(NMDSb$group)){
                         ,group=g))
 }  # run from here 
 
-# plot
+## GIS data 
+# removing unnecessary info from GIS data 
+gisvar2 <- gisvar %>% 
+              filter(!(plot_nr == 15)) %>% dplyr::select(!c(X, Y))
+
+# making environmental variable vectors for the plot 
+gisvar2 <- left_join(gisvar2, sites)  
+gisvar2 <- gisvar2 %>% 
+              dplyr::select(site_nr, ndvi, slope_deg, wetness, soil_depth, grazing_s) %>% 
+              mutate(grazing_m = grazing_s/60) %>% 
+              group_by(site_nr) %>% 
+              summarize(ndvi = mean(ndvi),
+                        slope_deg = mean(slope_deg),
+                        soil_depth = mean(soil_depth),
+                        wetness = mean(wetness),
+                        grazing_m = mean(grazing_m)) %>% 
+              ungroup() %>% 
+              dplyr::select(!site_nr)
+
+gisfit <- envfit(nmds6, gisvar2, permu = 999)
+gisfit   
+  # GIS variables don't have an effect, and neither does aspect or grazing 
+    # ndvi: R2 = 0.0268, p = 0.637
+    # slope: R2 = 0.1065, p = 0.169 
+    # wetness: R2 = 0.0004,  p = 0.988 
+    # soil depth: R2 = 0.0325, p = 0.608
+    # grazing: R2 = 0.0848, p = 0.240
+
+# gisarrows <- as.data.frame(scores(gisfit, "vectors"))    # use if significant env var 
+
+## NMDS Plot
 (nmds_plot3 <- ggplot(data.scoresb, aes(x = NMDS1, y = NMDS2)) + 
                   geom_polygon(data = df_ell3, aes(x = NMDS1, y = NMDS2, group = group,
                                                    color = group, fill = group), alpha = 0.2, 
@@ -1493,7 +1673,6 @@ for(g in levels(NMDSb$group)){
                   scale_fill_manual(values = c("#458264", "#F4A460"),
                                     labels = c("N", "S")))
 
-
 # . ----
 #### ANOSIM Tests ----
 ## For sp group ~ aspect 
@@ -1506,6 +1685,37 @@ ano_g <- anosim(cov_matrix_sp, cov_matrix$grazing_cat, distance = "bray", permut
 ano_g
   # not significantly different (R = -0.08811, p = 0.9864) 
 
-## For species ~ aspect
+
+## For species ~ aspect  (USE THIS)
 ano_sp <- anosim(sp_matrix2, sp_matrix$aspect, distance = "bray", permutations = 9999)
 ano_sp
+  # ANOSIM R = 0.04279, p = 0.1167 (not significant)
+
+## For sp group ~ grazing category
+grazing_cat <- sites %>% dplyr::select(site_nr, grazing_cat) %>% distinct()
+
+ano_g2 <- anosim(sp_matrix2, grazing_cat$grazing_cat, distance = "bray", permutations = 9999)
+ano_g2 
+  # no difference 
+
+
+# . ----
+#### Autocorrelation Test ----
+## Seeing if my sites that are closer together are more similar than those further apart
+sites_m <- sites %>% filter(plot == 1) %>% dplyr::select(x_coord, y_coord)
+            
+# creating a geographic df with Haversine distance 
+sites_d <- distm(sites_m, fun = distHaversine)
+sites_dist <- as.dist(sites_d)
+
+# creating relative abundance df with Bray-Curtis distance
+sp_dist <- vegdist(sp_matrix2, method = "bray")
+
+
+# rel abundance vs location 
+mantel_sp <- mantel(sp_dist, sites_dist, method = "spearman", permutations = 9999, na.rm = TRUE)
+mantel_sp
+  # not spatially autocorrelated
+  # used the Spearman method (non-parametric)
+    # p = 0.2268 (not significant)
+    # Mantel statistic r = 0.04687
