@@ -234,7 +234,7 @@ ggplot(richness, aes(x = grazing_m, y = richness_plot)) +   # N and S accounted 
 ggplot(richness_site, aes(x = grazing_m, y = richness_siteT)) +   # averaged across the plots
   geom_point()
 
-# will use this one for final 
+# use this one for final 
 ggplot(richness_site, aes(x = grazing_m, y = richness_siteT)) +   # averaged and aspect accounted for
   geom_point(aes(color = aspect)) +
   stat_smooth(method = "lm", aes(color = aspect))
@@ -243,6 +243,7 @@ ggplot(richness_site, aes(x = grazing_m, y = rich_propT)) +   # how proportions 
   geom_point(aes(color = sp_group)) +
   stat_smooth(method = "lm", aes(color = sp_group))
 
+# use this one for final? or without aspect
 ggplot(richness_site, aes(x = grazing_m, y = rich_propT)) +   # aspect accounted for 
   geom_point(aes(color = sp_group)) +
   stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group)) +   
@@ -259,6 +260,7 @@ ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +  # coverage of gr
   geom_point(aes(color = sp_group)) +
   stat_smooth(method = "lm", se = T, aes(color = sp_group, fill = sp_group), alpha = 0.3)
 
+# use this one for final
 ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +  # differences for N vs. S
   geom_point(aes(color = sp_group)) +
   stat_smooth(method = "lm", se = T, aes(color = sp_group, fill = sp_group)) +
@@ -267,6 +269,7 @@ ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +  # differences fo
 ggplot(coverage_site, aes(x = sp_group, y = coverage_perc)) +  # difference in coverage per group
   geom_boxplot()
 
+# use this one for final
 ggplot(coverage_site, aes(x = aspect, y = coverage_perc)) +   # coverage differences N vs. S
   geom_boxplot(aes(fill = sp_group))
 
@@ -275,6 +278,7 @@ ggplot(richness_site, aes(x = grazing_m, y = height_site)) +  # height with graz
   geom_point() +
   stat_smooth(method = "lm")
 
+# use this one for final
 ggplot(richness_site, aes(x = grazing_m, y = height_site)) +   # height of N vs. S plots 
   geom_point(aes(color = aspect)) +
   stat_smooth(method = "lm", aes(color = aspect, fill = aspect))
@@ -1278,17 +1282,17 @@ shapiro.test(resid(cov_lm))  # not normal
 kruskal.test(coverage_perc ~ sp_group, data = coverage_site)
   # chi-squared = 117.78, df = 4, p = < 2.2e-16 (SIGNIFICANT)
 
-dunn.test::dunn.test(coverage_site$coverage_perc, coverage_site$sp_group, list = T)
+dunn.test::dunn.test(coverage_site$coverage_perc, coverage_site$sp_group, list = F, altp = T)
 # diff = COLUMN minus ROW 
-  # grass-herb: diff = 2.8212, p = 0.0024 (SIGNIFICANT)
-  # grass-lichen: diff = -3.9275, p = 0.0000 (SIGNIFICANT)
-  # grass-moss: diff = -2.1323, p = 0.0165 (SIGNIFICANT)
+  # grass-herb: diff = 2.8212, p = 0.0048 (SIGNIFICANT)
+  # grass-lichen: diff = -3.9275, p = 0.0001 (SIGNIFICANT)
+  # grass-moss: diff = -2.1323, p = 0.0330 (SIGNIFICANT)
   # grass-shrub: diff = -7.3885, p = 0.0000 (SIGNIFICANT)
   # herb-lichen: diff = -6.6886, p = 0.0000 (SIGNIFICANT)
   # herb-moss: diff = -4.90089, p = 0.0000 (SIGNIFICANT)
   # herb-shrub: diff = -10.0968, p = 0.0000 (SIGNIFICANT)
-  # lichen-moss: diff = 1.76574, p = 0.0387 (SIGNIFICANT)
-  # lichen-shrub: diff = -3.461, p = 0.0003 (SIGNIFICANT)
+  # lichen-moss: diff = 1.76574, p = 0.0774 (not significant)
+  # lichen-shrub: diff = -3.461, p = 0.0005 (SIGNIFICANT)
   # moss-shrub: diff = -5.2008, p = 0.0000 (SIGNIFICANT)
 
 # coverage ~ group (NORTH)
@@ -1296,35 +1300,35 @@ coverageN <- coverage_site %>% filter(aspect == "N")
 kruskal.test(coverage_perc ~ sp_group, data = coverageN)
 # chi-squared = 61.961, df = 4, p = 1.122e-12 (SIGNIFICANT)
 
-dunn.test::dunn.test(coverageN$coverage_perc, coverageN$sp_group, list = T)
+dunn.test::dunn.test(coverageN$coverage_perc, coverageN$sp_group, list = F, altp = T)
 # diff = COLUMN minus ROW 
-  # grass-herb: diff = 2.140144, p = 0.0162 (SIGNIFICANT)
-  # grass-lichen: diff = -2.682129, p = 0.0037 (SIGNIFICANT)
+  # grass-herb: diff = 2.140144, p = 0.0323 (SIGNIFICANT)
+  # grass-lichen: diff = -2.682129, p = 0.0073 (SIGNIFICANT)
   # herb-lichen: diff = -4.822274, p = 0.0000 (SIGNIFICANT)
-  # grass-moss: diff = -2.022020, p = 0.0216 (SIGNIFICANT)
+  # grass-moss: diff = -2.022020, p = 0.0432 (SIGNIFICANT)
   # herb-moss: diff = -4.162165, p = 0.0000 (SIGNIFICANT)
-  # lichen-moss: diff = 0.660109, p = 0.2546 (not significant)
+  # lichen-moss: diff = 0.660109, p = 0.5092 (not significant)
   # grass-shrub: diff = -5.218340, p = 0.0000 (SIGNIFICANT)
   # herb-shrub: diff = -7.358485, p = 0.0000 (SIGNIFICANT)
-  # lichen-shrub: diff = -2.536210, p = 0.0056 (SIGNIFICANT)
-  # moss-shrub: diff = -3.196320, p = 0.0007 (SIGNIFICANT)
+  # lichen-shrub: diff = -2.536210, p = 0.0112 (SIGNIFICANT)
+  # moss-shrub: diff = -3.196320, p = 0.0014 (SIGNIFICANT)
 
 # coverage ~ group (SOUTH)
 coverageS <- coverage_site %>% filter(aspect == "S")
 kruskal.test(coverage_perc ~ sp_group, data = coverageS)
 # chi-squared = 55.836, df = 4, p = 2.17e-11 (SIGNIFICANT)
 
-dunn.test::dunn.test(coverageS$coverage_perc, coverageS$sp_group, list = T)
+dunn.test::dunn.test(coverageS$coverage_perc, coverageS$sp_group, list = F, altp = T)
 # diff = COLUMN minus ROW 
-  # grass-herb: diff = 1.861202, p = 0.0314 (SIGNIFICANT)
-  # grass-lichen: diff = -2.822872, p = 0.0024 (SIGNIFICANT)
+  # grass-herb: diff = 1.861202, p = 0.0627 (not significant)
+  # grass-lichen: diff = -2.822872, p = 0.0048 (SIGNIFICANT)
   # herb-lichen: diff = -4.594437, p = 0.0000 (SIGNIFICANT)
-  # grass-moss: diff = -1.003856, p = 0.1577 (not significant)
-  # herb-moss: diff = -2.807424, p = 0.0025 (SIGNIFICANT)
-  # lichen-moss: diff = 1.775916, p = 0.0379 (SIGNIFICANT)
+  # grass-moss: diff = -1.003856, p = 0.3154 (not significant)
+  # herb-moss: diff = -2.807424, p = 0.0050 (SIGNIFICANT)
+  # lichen-moss: diff = 1.775916, p = 0.0757 (not significant)
   # grass-shrub: diff = -5.156062, p = 0.0000 (SIGNIFICANT)
   # herb-shrub: diff = -6.853539, p = 0.0000 (SIGNIFICANT)
-  # lichen-shrub: diff = -2.333190, p = 0.0098 (SIGNIFICANT)
+  # lichen-shrub: diff = -2.333190, p = 0.0196 (SIGNIFICANT)
   # moss-shrub: diff = -4.073483, p = 0.0000 (SIGNIFICANT)
 
 
@@ -1581,51 +1585,7 @@ nmds6
   # 6 dimensions 
 
 
-### Plotting the NMDS ----
-# making a theme
-theme_thesis <- theme_bw() +
-                  theme(panel.grid = element_blank(),
-                        axis.title.x = 
-                          element_text(margin = margin(t = 10, r = 0, b = 0, l = 0)),
-                        axis.title.y = 
-                          element_text(margin = margin(t = 0, r = 10, b = 0, l = 0))) +
-                  theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
-
-# extracting NMDS scores (x and y coordinates)
-data.scoresb <- as.data.frame(scores(nmds6))
-species_scoresb <- as.data.frame(scores(nmds6, "species"))
-species_scoresb$species <- rownames(species_scoresb)
-
-data.scoresb$aspect <- sp_matrix$aspect
-
-NMDSb <- data.frame(NMDS1 = nmds6$points[,1], NMDS2 = nmds6$points[,2], 
-                    group = data.scoresb$aspect)
-NMDSb$group <- as.factor(NMDSb$group)
-
-NMDSb_mean <- aggregate(NMDSb[,1:2], list(group = NMDSb$group), "mean")
-
-## Making the ellipsoids
-# function for ellipses
-veganCovEllipse <- function (cov, center = c(0, 0), scale = 1, npoints = 100) 
-{
-  theta <- (0:npoints) * 2 * pi/npoints
-  Circle <- cbind(cos(theta), sin(theta))
-  t(center + scale * t(Circle %*% chol(cov)))
-}  # run from here
-
-ord3 <- ordiellipse(nmds6, data.scoresb$aspect, label = T, conf = 0.95)
-
-df_ell3 <- data.frame()   # run from here (this side)
-
-for(g in levels(NMDSb$group)){
-  df_ell3 <- rbind(df_ell3, 
-                   cbind(as.data.frame(with(NMDSb[NMDSb$group==g,],
-                                           veganCovEllipse(ord3[[g]]$cov, ord3[[g]]$center,
-                                                           ord3[[g]]$scale)))
-                        ,group=g))
-}  # run from here 
-
-## GIS data 
+### Effect of Env Variables ----
 # removing unnecessary info from GIS data 
 gisvar2 <- gisvar %>% 
               filter(!(plot_nr == 15)) %>% dplyr::select(!c(X, Y))
@@ -1652,26 +1612,6 @@ gisfit
     # wetness: R2 = 0.0004,  p = 0.988 
     # soil depth: R2 = 0.0325, p = 0.608
     # grazing: R2 = 0.0848, p = 0.240
-
-# gisarrows <- as.data.frame(scores(gisfit, "vectors"))    # use if significant env var 
-
-## NMDS Plot
-(nmds_plot3 <- ggplot(data.scoresb, aes(x = NMDS1, y = NMDS2)) + 
-                  geom_polygon(data = df_ell3, aes(x = NMDS1, y = NMDS2, group = group,
-                                                   color = group, fill = group), alpha = 0.2, 
-                               size = 0.5, linetype = 1) +
-                  geom_point(aes(color = aspect, shape = aspect, fill = aspect), 
-                             size = 2, alpha = 0.6) +
-               #   geom_text(data = species_scoresb, aes(x = NMDS1, y = NMDS2, label = species),
-                #            alpha = 0.5, size = 2) +
-                  theme_thesis + 
-                  labs(x = "NMDS1", y = "NMDS2") +
-                  scale_color_manual(values = c("#458264", "#F4A460"),
-                                     labels = c("N", "S")) +
-                  scale_shape_manual(values = c(21, 22),
-                                     labels = c("N", "S")) +
-                  scale_fill_manual(values = c("#458264", "#F4A460"),
-                                    labels = c("N", "S")))
 
 # . ----
 #### ANOSIM Tests ----
