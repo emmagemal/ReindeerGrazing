@@ -12,6 +12,7 @@ library(lmtest)
 library(lme4)
 library(vegan)
 library(geosphere)  # for 'mantel()' test 
+library(indicspecies)   # for indicator sp. test 
 
 #### Data Import ----
 sites <- read.csv("Data/site_conditions.csv")
@@ -49,7 +50,8 @@ str(wetness)   # make plot_nr categorical and combine with others
 sites <- sites %>% 
             mutate(date = as.Date(date, format = "%d/%m/%y"),
                    plot = as.character(plot),
-                   plot_nr = as.character(plot_nr)) %>% 
+                   plot_nr = as.character(plot_nr),
+                   site_nr = as.character(site_nr)) %>% 
             mutate(aspect = case_when(grepl("S", site) ~ "S",
                                       grepl("N", site) ~ "N"),
                    grazing_cat = substr(site, 1, 1))   # adding aspect
@@ -130,7 +132,7 @@ plots %>% group_by(plot_nr, sp_latin) %>% summarise(x = length(sp_latin)) %>% fi
 
 
 # . ----
-#### Variable Calculations ----
+#### Variable Creation ----
 ### Species richness
 plots <- plots %>% 
             group_by(plot_nr) %>% 
@@ -159,9 +161,23 @@ richness <- plots %>%
               group_by(sp_group, site_nr) %>% 
               mutate(rich_propT = mean(rich_group_prop))
 
+# creating a new categorical grazing variable with 3 categories 
+summary(sites)
+  # min grazing = 16.42s
+  # max grazing = 1774.98s
+
+sites <- sites %>% 
+            mutate(grazing_cat2 = case_when(grazing_s < 300 ~ "1",     # low
+                                            grazing_s >= 300 & grazing_s < 800 ~ "2",
+                                            grazing_s >= 800 ~ "3"))   # high
+
+sites %>% group_by(grazing_cat2) %>%  summarize(length(grazing_cat2))
+  # made it as even as possible without making it too 'incorrect' for what is L, M, and H
+
+
 ### Combining dataframes ----
 ## Combining 'richness' with 'sites' to add grazing data 
-grazing <- sites %>% dplyr::select(site_nr, plot_nr, plot, aspect, grazing_s, grazing_cat)
+grazing <- sites %>% dplyr::select(site_nr, plot_nr, plot, aspect, grazing_s, grazing_cat2)
 grazing <- grazing %>% mutate(grazing_m = grazing_s/60)
 str(grazing)
 
@@ -1359,11 +1375,400 @@ wilcox.test(coverage_perc ~ aspect, data = h)
 
 
 # . ----
+#### NMDS Relative Abundance ----
+### NMDS ~ Site ----
+## Dividing coverage across species
+sp_cov <- left_join(plots, coverage)
+sp_cov <- sp_cov %>% 
+            dplyr::select(site_nr, plot_nr, aspect, sp_latin, sp_group, coverage_perc) %>% 
+            group_by(site_nr, plot_nr, sp_group) %>% 
+            mutate(rel_abund = coverage_perc/length(sp_group)) %>% 
+            ungroup() %>% 
+            na.omit() %>% 
+            group_by(site_nr, sp_latin, aspect) %>% 
+            summarize(rel_abund2 = sum(rel_abund)) %>% 
+            mutate(rel_abund2 = ifelse(site_nr == "5", rel_abund2/2, rel_abund2/3)) %>% 
+            ungroup()
+
+print(sp_cov %>% group_by(site_nr) %>% summarise(sum(rel_abund2)), n = 105)  # all = 100%! 
+
+## Making a matrix
+sp_matrix <- sp_cov %>% 
+                distinct() %>% 
+                pivot_wider(names_from = "sp_latin", values_from = "rel_abund2", 
+                            values_fill = NA)  # get a warning, but no duplicates found
+
+sp_matrix[is.na(sp_matrix)] <- 0  # making sure non-existent sp just have coverage of 0
+
+# with only coverage data 
+sp_matrix2 <- sp_matrix %>% 
+                dplyr::select(!c(site_nr, aspect)) 
+
+## Looking at how many axes to extract 
+set.seed(9)
+mds1 <- metaMDS(sp_matrix2, distance = "bray", k = 1, sratmax = 0.99999,    # no convergence
+                autotransform = F)   
+mds2 <- metaMDS(sp_matrix2, distance = "bray", k = 2, sratmax = 0.99999,    # no convergence
+                autotransform = F)   
+mds3 <- metaMDS(sp_matrix2, distance = "bray", k = 3, sratmax = 0.99999,    # solution found
+                autotransform = F) 
+mds4 <- metaMDS(sp_matrix2, distance = "bray", k = 4, sratmax = 0.99999,    # solution found 
+                autotransform = F)
+  # stress = 0.1256
+mds5 <- metaMDS(sp_matrix2, distance = "bray", k = 5, sratmax = 0.99999,    # solution found?
+                autotransform = F)    
+  # stress = 0.0976
+mds6 <- metaMDS(sp_matrix2, distance = "bray", k = 6, sratmax = 0.99999,    # solution found 
+                autotransform = F) 
+  # stress = 0.0798
+mds7 <- metaMDS(sp_matrix2, distance = "bray", k = 7, sratmax = 0.99999,    # solution found 
+                autotransform = F) 
+  # stress = 0.0654
+mds8 <- metaMDS(sp_matrix2, distance = "bray", k = 8, sratmax = 0.99999,    # solution found
+                autotransform = F) 
+  # stress = 0.0566
+mds9 <- metaMDS(sp_matrix2, distance = "bray", k = 9, sratmax = 0.99999,    # solution found? 
+                autotransform = F) 
+mds10 <- metaMDS(sp_matrix2, distance = "bray", k = 10, sratmax = 0.99999,    # no convergence?
+                 autotransform = F)  
+
+scree <- cbind(rbind(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 
+               rbind(mds1$stress, mds2$stress, mds3$stress, mds4$stress, mds5$stress, 
+                     mds6$stress, mds7$stress, mds8$stress, mds9$stress, mds10$stress))
+plot(scree)
+  # ~5 or more dimensions = <0.1 stress (which is good)
+
+stressplot(mds5)   # non-metric fit = 0.996, linear fit = 0.957
+stressplot(mds6)   # non-metric fit = 0.997, linear fit = 0.972
+stressplot(mds7)   # non-metric fit = 0.998, linear fit = 0.98
+stressplot(mds8)   # non-metric fit = 0.999, linear fit = 0.986
+stressplot(mds9)   # non-metric fit = 0.999, linear fit = 0.99
+
+  # 6 dimensions improves the linear fit quite a bit, then afterwards it tapers off 
+
+# choosing k = 6
+
+set.seed(6)
+nmds6 <- metaMDS(sp_matrix2, distance = "bray", k = 6, autotransform = F, trymax = 500, 
+                 sratmax = 0.99999)  
+  # note that autotransformation is off (default = T) 
+
+nmds6
+  # stress = 0.05118
+  # 6 dimensions 
+
+
+### NMDS ~ Plot ----
+## Dividing coverage across species
+sp_cov2 <- left_join(plots, coverage)
+sp_cov2 <- sp_cov2 %>% 
+              dplyr::select(plot_nr, aspect, sp_latin, sp_group, coverage_perc) %>% 
+              group_by(plot_nr, sp_group) %>% 
+              mutate(rel_abund = coverage_perc/length(sp_group)) %>% 
+              ungroup() %>% 
+              na.omit() %>% 
+              dplyr::select(!c(coverage_perc, sp_group))
+
+print(sp_cov2 %>% group_by(plot_nr) %>% summarise(sum(rel_abund)), n = 105)  # all = 100%! 
+
+## Making a matrix
+sp_matrix3 <- sp_cov2 %>% 
+                  distinct() %>% 
+                  pivot_wider(names_from = "sp_latin", values_from = "rel_abund", 
+                              values_fill = NA)
+
+sp_matrix3[is.na(sp_matrix3)] <- 0  # making sure non-existent sp just have coverage of 0
+
+# with only abundance data 
+sp_matrix4 <- sp_matrix3 %>% 
+                 dplyr::select(!c(plot_nr, aspect)) 
+
+## Looking at how many axes to extract 
+set.seed(9)
+mds1b <- metaMDS(sp_matrix4, distance = "bray", k = 1, sratmax = 0.99999,    # no convergence
+                 autotransform = F)   
+mds2b <- metaMDS(sp_matrix4, distance = "bray", k = 2, sratmax = 0.99999,    # no convergence
+                 autotransform = F)   
+mds3b <- metaMDS(sp_matrix4, distance = "bray", k = 3, sratmax = 0.99999,    # no convergence
+                 autotransform = F) 
+mds4b <- metaMDS(sp_matrix4, distance = "bray", k = 4, sratmax = 0.99999,    # solution found 
+                 autotransform = F)
+  # stress = 0.1258
+mds5b <- metaMDS(sp_matrix4, distance = "bray", k = 5, sratmax = 0.99999,    # solution found
+                 autotransform = F)    
+  # stress = 0.0972
+mds6b <- metaMDS(sp_matrix4, distance = "bray", k = 6, sratmax = 0.99999,    # solution found 
+                 autotransform = F) 
+  # stress = 0.0794
+mds7b <- metaMDS(sp_matrix4, distance = "bray", k = 7, sratmax = 0.99999,    # solution found 
+                 autotransform = F) 
+  # stress = 0.06616
+mds8b <- metaMDS(sp_matrix4, distance = "bray", k = 8, sratmax = 0.99999,    # solution found
+                 autotransform = F) 
+  # stress = 0.05608
+mds9b <- metaMDS(sp_matrix4, distance = "bray", k = 9, sratmax = 0.99999,    # no convergence
+                 autotransform = F) 
+mds10b <- metaMDS(sp_matrix4, distance = "bray", k = 10, sratmax = 0.99999,    # no convergence
+                  autotransform = F)  
+
+scree <- cbind(rbind(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 
+               rbind(mds1b$stress, mds2b$stress, mds3b$stress, mds4b$stress, mds5b$stress, 
+                     mds6b$stress, mds7b$stress, mds8b$stress, mds9b$stress, mds10b$stress))
+plot(scree)
+# ~6 or more dimensions = <0.1 stress (which is good)
+
+stressplot(mds6b)   # non-metric fit = 0.994, linear fit = 0.934
+stressplot(mds7b)   # non-metric fit = 0.996, linear fit = 0.949
+stressplot(mds8b)   # non-metric fit = 0.997, linear fit = 0.959
+stressplot(mds9b)   # non-metric fit = 0.998, linear fit = 0.967
+
+# 7 dimensions improves the linear fit quite a bit, then afterwards it tapers off 
+
+# choosing k = 7
+
+set.seed(7)
+nmds7 <- metaMDS(sp_matrix4, distance = "bray", k = 7, autotransform = F, trymax = 500, 
+                 sratmax = 0.99999)  
+# note that autotransformation is off (default = T) 
+
+nmds7
+# stress = ~0.06574
+# 7 dimensions 
+
+
+### Effect of Env Variables ----
+## For Sites
+# removing unnecessary info from GIS data 
+gisvar2 <- gisvar %>% 
+              filter(!(plot_nr == 15)) %>% dplyr::select(!c(X, Y))
+
+# making environmental variable vectors for the site 
+gisvar_long <- left_join(gisvar2, sites)  
+gisvar_long <- gisvar_long %>% mutate(grazing_m = grazing_s/60)
+
+gisvar_sites <- gisvar_long %>% 
+                  dplyr::select(site_nr, ndvi, slope_deg, wetness, soil_depth, grazing_s) %>% 
+                  group_by(site_nr) %>% 
+                  summarize(ndvi = mean(ndvi),
+                            slope_deg = mean(slope_deg),
+                            soil_depth = mean(soil_depth),
+                            wetness = mean(wetness),
+                            grazing_m = mean(grazing_m)) %>% 
+                  ungroup() %>% 
+                  dplyr::select(!site_nr)
+
+gisfit <- envfit(nmds6, gisvar_sites, permu = 999)
+gisfit   
+  # GIS variables don't have an effect, and neither does aspect or grazing 
+    # ndvi: R2 = 0.0268, p = 0.637
+    # slope: R2 = 0.1065, p = 0.169 
+    # wetness: R2 = 0.0004,  p = 0.988 
+    # soil depth: R2 = 0.0325, p = 0.608
+    # grazing: R2 = 0.0848, p = 0.240
+
+## For Plots 
+gisvar_plots <- gisvar_long %>%  
+                  dplyr::select(site_nr, plot_nr, plot, ndvi, slope_deg, wetness, 
+                                soil_depth, grazing_m) 
+gisvar_plots2 <- gisvar_plots %>% dplyr::select(!c(plot, plot_nr))
+
+gisfit2 <- envfit(nmds7, gisvar_plots2, permu = 999)
+gisfit2   
+  # ndvi: R2 = 0.2264, p = 0.001 (SIGNIFICANT)
+  # slope: R2 = 0.2169, p = 0.001 (SIGNIFICANT)
+  # wetness: R2 = 0.1994,  p = 0.001 (SIGNIFICANT) 
+  # soil depth: R2 = 0.0073, p = 0.706  
+  # grazing: R2 = 0.0038, p = 0.822   
+
+
+## NMDS with GIS as matrix
+# making ndvi not negative
+gisvar2b <- gisvar2 %>% 
+              mutate(ndvi = ifelse(ndvi < 0, ndvi + 0.025, ndvi)) %>% 
+              dplyr::select(!(plot_nr))
+
+
+# NMDS 
+set.seed(9)
+mds1gis <- metaMDS(gisvar2b, distance = "bray", k = 1, sratmax = 0.99999,    # no convergence
+                   autotransform = F)   
+mds2gis <- metaMDS(gisvar2b, distance = "bray", k = 2, sratmax = 0.99999,    # solution found 
+                   autotransform = F)   
+  # stress = 0.085912
+mds3gis <- metaMDS(gisvar2b, distance = "bray", k = 3, sratmax = 0.99999,    # solution found 
+                   autotransform = F) 
+  # stress = 0.061489
+mds4gis <- metaMDS(gisvar2b, distance = "bray", k = 4, sratmax = 0.99999,    # solution found 
+                   autotransform = F)
+  # stress = 0.04273
+mds5gis <- metaMDS(gisvar2b, distance = "bray", k = 5, sratmax = 0.99999,    # solution found 
+                   autotransform = F)   
+  # stress = 0.0337
+mds6gis <- metaMDS(gisvar2b, distance = "bray", k = 6, sratmax = 0.99999,    # no convergence
+                   autotransform = F) 
+mds7gis <- metaMDS(gisvar2b, distance = "bray", k = 7, sratmax = 0.99999,    # no convergence 
+                   autotransform = F) 
+mds8gis <- metaMDS(gisvar2b, distance = "bray", k = 8, sratmax = 0.99999,    # no convergence
+                   autotransform = F) 
+mds9gis <- metaMDS(gisvar2b, distance = "bray", k = 9, sratmax = 0.99999,    # no convergence
+                   autotransform = F) 
+mds10gis <- metaMDS(gisvar2b, distance = "bray", k = 10, sratmax = 0.99999,    # no convergence
+                    autotransform = F) 
+
+scree2 <- cbind(rbind(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 
+                rbind(mds1gis$stress, mds2gis$stress, mds3gis$stress, mds4gis$stress, mds5gis$stress, 
+                      mds6gis$stress, mds7gis$stress, mds8gis$stress, mds9gis$stress, mds10gis$stress))
+plot(scree2)
+# ~2 or more dimensions = <0.1 stress (which is good)
+
+stressplot(mds2gis)   # non-metric fit = 0.993, linear fit = 0.972
+stressplot(mds3gis)   # non-metric fit = 0.996, linear fit = 0.984
+stressplot(mds4gis)   # non-metric fit = 0.998, linear fit = 0.991
+stressplot(mds5gis)   # non-metric fit = 0.999, linear fit = 0.994
+# k = 4 is best 
+
+set.seed(4)
+nmds4 <- metaMDS(gisvar2b, distance = "bray", k = 4, autotransform = F, trymax = 500, 
+                 sratmax = 0.99999)  
+  # note that autotransformation is off (default = T) 
+
+nmds4
+  # stress = 0.041999
+  # 4 dimensions 
+
+#### Visualizing NMDS's ----
+### Site
+plot(nmds6, type = "t", display = "sites") 
+plot(gisfit2, p.max = 0.01, col = "red")
+dev.off()
+
+### Plot
+plot(nmds7, type = "t", display = "sites") 
+plot(gisfit2, p.max = 0.01, col = "red")
+dev.off()
+
+### GIS ~ Sp 
+gisvar_plots <- gisvar_plots %>% 
+                  mutate(plot_rep2 = case_when(plot == "1" ~ "A",
+                                               plot == "2" ~ "B",
+                                               plot == "3" ~ "C")) %>% 
+                  mutate(site_plot = str_c(site_nr, "", plot_rep2))
+
+plot(nmds4, type = "n") 
+text(nmds4, labels = gisvar_plots$site_plot, cex = 0.5, col = gisvar_plots$site_nr)
+# dev.off()
+
+# envfit() for relative abundance 
+spfit <- envfit(nmds4, sp_matrix4, permutations = 999)
+
+# plot(nmds4, type = "n") 
+# text(nmds4, labels = gisvar_plots$site_plot, cex = 0.5, col = gisvar_plots$site_nr)
+plot(spfit, p.max = 0.001, cex = 0.8)  # adding arrows to the above plot §
+
+# plot(gisfit2, p.max = 0.01, col = "red")
+dev.off()
+
+#### ANOSIM Tests ----
+### By Site 
+## Rel abundance ~ aspect 
+ano_sp <- anosim(sp_matrix2, sp_matrix$aspect, distance = "bray", permutations = 9999)
+ano_sp
+  # ANOSIM R = 0.04279, p = 0.1167 (not significant)
+
+## Rel abundance ~ grazing category 
+# making grazing categories for sites instead of plots 
+grazecat <- sites %>% 
+              mutate(grazing_cat2 = as.numeric(grazing_cat2)) %>% 
+              group_by(site_nr) %>% 
+              summarize(grazecat = mean(grazing_cat2)) %>% 
+              mutate(grazecat = round(grazecat)) %>% 
+              mutate(grazecat = as.character(grazecat))
+
+ano_g <- anosim(sp_matrix2, grazecat$grazecat, distance = "bray", permutations = 9999)
+ano_g 
+  # no difference 
+
+### By Plot
+## Rel abundance ~ aspect 
+ano_sp2 <- anosim(sp_matrix4, sp_matri3a$aspect, distance = "bray", permutations = 9999)
+ano_sp2
+# ANOSIM R = 0.03782, p = 0.0134 (SIGNIFICANT)
+
+
+
+#### Indicator Species Test ----
+### By Site 
+# sp_matrix2 = matrix with abundance
+
+## With aspect 
+aspect <- sp_matrix$aspect
+
+indsp <- multipatt(sp_matrix2, aspect, func = "r.g", control = how(nperm = 9999))
+summary(indsp)
+  # those found significantly more in N-facing slopes:
+    # Cladonia pyxidata: stat = 0.399, p = 0.0143 
+    # Polytrichum commune: stat = 0.393, p = 0.0196
+    # Barbilophozia kunzeana: stat = 0.376, p = 0.0469
+
+  # those found significantly more in S-facing slopes:
+    # Empetrum nigrum ssp. hermaphroditum: stat = 0.421, p = 0.0146
+
+## With grazing categories
+grazecat2 <- grazecat$grazecat
+
+indsp2 <- multipatt(sp_matrix2, grazecat2, func = "r.g", control = how(nperm = 9999))
+summary(indsp2)
+
+
+### By Plot
+# sp_matrix3 = matrix with abundance
+
+## With aspect 
+aspect <- sp_matrix3$aspect
+
+indsp2 <- multipatt(sp_matrix4, aspect, func = "r.g", control = how(nperm = 9999))
+summary(indsp2)
+# those found significantly more in N-facing slopes:
+  # Cladonia pyxidata: stat = 0.327, p = 0.0005 
+  # Polytrichum commune: stat = 0.253, p = 0.0068
+
+# those found significantly more in S-facing slopes:
+  # Empetrum nigrum ssp. hermaphroditum: stat = 0.329, p = 0.0005
+  # Arctostaphylos alpina: stat = 0.210, p = 0.0358
+  # Cladonia deformis: stat = 0.203, p = 0.0411
+
+
+# . ----
+#### Autocorrelation Test ----
+## Seeing if my sites that are closer together are more similar than those further apart
+sites_m <- sites %>% filter(plot == 1) %>% dplyr::select(x_coord, y_coord)
+            
+# creating a geographic df with Haversine distance 
+sites_d <- distm(sites_m, fun = distHaversine)
+sites_dist <- as.dist(sites_d)
+
+# creating relative abundance df with Bray-Curtis distance
+sp_dist <- vegdist(sp_matrix2, method = "bray")
+
+
+# rel abundance vs location 
+mantel_sp <- mantel(sp_dist, sites_dist, method = "spearman", permutations = 9999, na.rm = TRUE)
+mantel_sp
+  # not spatially autocorrelated
+  # used the Spearman method (non-parametric)
+    # p = 0.2268 (not significant)
+    # Mantel statistic r = 0.04687
+
+
+
+#
+#
+# OLD #
 #### NMDS (Coverage by Group) ----
 ### Making a matrix
 cov_matrix <- coverage_site %>% 
-                  dplyr::select(site_nr, aspect, grazing_cat, sp_group, coverage_perc) %>% 
-                  pivot_wider(names_from = "sp_group", values_from = "coverage_perc") 
+  dplyr::select(site_nr, aspect, grazing_cat, sp_group, coverage_perc) %>% 
+  pivot_wider(names_from = "sp_group", values_from = "coverage_perc") 
 
 cov_matrix[is.na(cov_matrix)] <- 0  # making sure non-existent groups just have coverage of 0
 
@@ -1392,7 +1797,7 @@ nmds <- metaMDS(cov_matrix_sp, distance = "bray", k = 3, autotransform = TRUE, t
 nmds
 
 nmds2 <- metaMDS(cov_matrix_sp, distance = "bray", k = 4, autotransform = TRUE, trymax = 500, 
-                sratmax = 0.999)  
+                 sratmax = 0.999)  
 nmds2
 
 ### Plotting the NMDS 
@@ -1422,9 +1827,9 @@ theme_thesis <- theme_bw() +
   theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
 
 
-## Plotting by aspect ----
+## Plotting by aspect
 NMDSa <- data.frame(MDS1 = nmds$points[,1], MDS2 = nmds$points[,2], 
-                      group = data.scores$aspect)
+                    group = data.scores$aspect)
 
 NMDSa$group <- as.factor(NMDSa$group)
 NMDSa_mean <- aggregate(NMDSa[,1:2], list(group = NMDSa$group), "mean")
@@ -1437,40 +1842,40 @@ df_ell <- data.frame()   # run from here (this side)
 for(g in levels(NMDSa$group)){
   df_ell <- rbind(df_ell, 
                   cbind(as.data.frame(with(NMDSa[NMDSa$group==g,],
-                                              veganCovEllipse(ord[[g]]$cov, ord[[g]]$center,
-                                                              ord[[g]]$scale)))
-                           ,group=g))
+                                           veganCovEllipse(ord[[g]]$cov, ord[[g]]$center,
+                                                           ord[[g]]$scale)))
+                        ,group=g))
 }  # run from here 
 
 
 # making a theme
 theme_thesis <- theme_bw() +
-                    theme(panel.grid = element_blank(),
-                          axis.title.x = 
-                            element_text(margin = margin(t = 10, r = 0, b = 0, l = 0)),
-                          axis.title.y = 
-                            element_text(margin = margin(t = 0, r = 10, b = 0, l = 0))) +
-                    theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
+  theme(panel.grid = element_blank(),
+        axis.title.x = 
+          element_text(margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = 
+          element_text(margin = margin(t = 0, r = 10, b = 0, l = 0))) +
+  theme(plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
 
 # plot
 (nmds_plot <- ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) + 
-                geom_polygon(data = df_ell, aes(x = NMDS1, y = NMDS2, group = group,
-                                                   color = group, fill = group), alpha = 0.2, 
-                             size = 0.5, linetype = 1) +
-                geom_point(aes(color = aspect, shape = aspect, fill = aspect), 
-                           size = 2, alpha = 0.6) +
-                geom_text(data = species_scores, aes(x = NMDS1, y = NMDS2, label = species),
-                          alpha = 0.5, size = 2) +
-                theme_thesis + 
-                labs(x = "NMDS1", y = "NMDS2") +
-                scale_color_manual(values = c("#458264", "#F4A460"),
-                                   labels = c("N", "S")) +
-                scale_shape_manual(values = c(21, 22),
-                                   labels = c("N", "S")) +
-                scale_fill_manual(values = c("#458264", "#F4A460"),
-                                  labels = c("N", "S")))
+    geom_polygon(data = df_ell, aes(x = NMDS1, y = NMDS2, group = group,
+                                    color = group, fill = group), alpha = 0.2, 
+                 size = 0.5, linetype = 1) +
+    geom_point(aes(color = aspect, shape = aspect, fill = aspect), 
+               size = 2, alpha = 0.6) +
+    geom_text(data = species_scores, aes(x = NMDS1, y = NMDS2, label = species),
+              alpha = 0.5, size = 2) +
+    theme_thesis + 
+    labs(x = "NMDS1", y = "NMDS2") +
+    scale_color_manual(values = c("#458264", "#F4A460"),
+                       labels = c("N", "S")) +
+    scale_shape_manual(values = c(21, 22),
+                       labels = c("N", "S")) +
+    scale_fill_manual(values = c("#458264", "#F4A460"),
+                      labels = c("N", "S")))
 
-## Plotting by grazing category ----
+## Plotting by grazing category
 NMDSg <- data.frame(MDS1 = nmds$points[,1], MDS2 = nmds$points[,2], 
                     group = data.scores$grazing_cat)
 
@@ -1484,178 +1889,32 @@ df_ell2 <- data.frame()   # run from here (this side)
 
 for(g in levels(NMDSg$group)){
   df_ell2 <- rbind(df_ell2, 
-                  cbind(as.data.frame(with(NMDSg[NMDSg$group==g,],
-                                           veganCovEllipse(ord2[[g]]$cov, ord2[[g]]$center,
-                                                           ord2[[g]]$scale)))
-                        ,group=g))
+                   cbind(as.data.frame(with(NMDSg[NMDSg$group==g,],
+                                            veganCovEllipse(ord2[[g]]$cov, ord2[[g]]$center,
+                                                            ord2[[g]]$scale)))
+                         ,group=g))
 }  # run from here 
 
 
 # plot
 (nmds_plot2 <- ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) + 
-                  geom_polygon(data = df_ell2, aes(x = NMDS1, y = NMDS2, group = group,
-                                                   color = group, fill = group), alpha = 0.2, 
-                               size = 0.5, linetype = 1) +
-                  geom_point(aes(color = grazing_cat, shape = grazing_cat, fill = grazing_cat), 
-                             size = 2, alpha = 0.6) +
-                  geom_text(data = species_scores, aes(x = NMDS1, y = NMDS2, label = species),
-                            alpha = 0.5, size = 2) +
-                  theme_thesis + 
-                  labs(x = "NMDS1", y = "NMDS2"))
+    geom_polygon(data = df_ell2, aes(x = NMDS1, y = NMDS2, group = group,
+                                     color = group, fill = group), alpha = 0.2, 
+                 size = 0.5, linetype = 1) +
+    geom_point(aes(color = grazing_cat, shape = grazing_cat, fill = grazing_cat), 
+               size = 2, alpha = 0.6) +
+    geom_text(data = species_scores, aes(x = NMDS1, y = NMDS2, label = species),
+              alpha = 0.5, size = 2) +
+    theme_thesis + 
+    labs(x = "NMDS1", y = "NMDS2"))
 
-#### NMDS (Coverage by Sp) ----
-### Dividing coverage across species
-sp_cov <- left_join(plots, coverage)
-sp_cov <- sp_cov %>% 
-            dplyr::select(site_nr, plot_nr, aspect, sp_latin, sp_group, coverage_perc) %>% 
-            group_by(site_nr, plot_nr, sp_group) %>% 
-            mutate(rel_abund = coverage_perc/length(sp_group)) %>% 
-            ungroup() %>% 
-            na.omit() %>% 
-            group_by(site_nr, sp_latin, aspect) %>% 
-            summarize(rel_abund2 = sum(rel_abund)) %>% 
-            mutate(rel_abund2 = ifelse(site_nr == "5", rel_abund2/2, rel_abund2/3)) %>% 
-            ungroup()
-
-print(sp_cov %>% group_by(site_nr) %>% summarise(sum(rel_abund2)), n = 105)  # all = 100%! 
-
-### Making a matrix
-sp_matrix <- sp_cov %>% 
-                distinct() %>% 
-                pivot_wider(names_from = "sp_latin", values_from = "rel_abund2", 
-                            values_fill = NA)  # get a warning, but no duplicates found
-
-sp_matrix[is.na(sp_matrix)] <- 0  # making sure non-existent sp just have coverage of 0
-
-# with only coverage data 
-sp_matrix2 <- sp_matrix %>% 
-                dplyr::select(!c(site_nr, aspect)) 
-
-### Looking at how many axes to extract 
-set.seed(9)
-mds1b <- metaMDS(sp_matrix2, distance = "bray", k = 1, sratmax = 0.99999,    # no convergence
-                 autotransform = F)   
-mds2b <- metaMDS(sp_matrix2, distance = "bray", k = 2, sratmax = 0.99999,    # no convergence
-                 autotransform = F)   
-mds3b <- metaMDS(sp_matrix2, distance = "bray", k = 3, sratmax = 0.99999,    # solution found
-                 autotransform = F) 
-mds4b <- metaMDS(sp_matrix2, distance = "bray", k = 4, sratmax = 0.99999,    # solution found 
-                 autotransform = F)
-  # stress = 0.1256
-mds5b <- metaMDS(sp_matrix2, distance = "bray", k = 5, sratmax = 0.99999,    # solution found?
-                 autotransform = F)    
-  # stress = 0.0976
-mds6b <- metaMDS(sp_matrix2, distance = "bray", k = 6, sratmax = 0.99999,    # solution found 
-                 autotransform = F) 
-  # stress = 0.0798
-mds7b <- metaMDS(sp_matrix2, distance = "bray", k = 7, sratmax = 0.99999,    # solution found 
-                 autotransform = F) 
-  # stress = 0.0654
-mds8b <- metaMDS(sp_matrix2, distance = "bray", k = 8, sratmax = 0.99999,    # solution found
-                 autotransform = F) 
-  # stress = 0.0566
-mds9b <- metaMDS(sp_matrix2, distance = "bray", k = 9, sratmax = 0.99999,    # solution found? 
-                 autotransform = F) 
-mds10b <- metaMDS(sp_matrix2, distance = "bray", k = 10, sratmax = 0.99999,    # no convergence?
-                  autotransform = F)  
-
-scree <- cbind(rbind(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 
-               rbind(mds1b$stress, mds2b$stress, mds3b$stress, mds4b$stress, mds5b$stress, 
-                     mds6b$stress, mds7b$stress, mds8b$stress, mds9b$stress, mds10b$stress))
-plot(scree)
-  # ~5 or more dimensions = <0.1 stress (which is good)
-
-stressplot(mds5b)   # non-metric fit = 0.996, linear fit = 0.957
-stressplot(mds6b)   # non-metric fit = 0.997, linear fit = 0.972
-stressplot(mds7b)   # non-metric fit = 0.998, linear fit = 0.98
-stressplot(mds8b)   # non-metric fit = 0.999, linear fit = 0.986
-stressplot(mds9b)   # non-metric fit = 0.999, linear fit = 0.99
-
-  # 6 dimensions improves the linear fit quite a bit, then afterwards it tapers off 
-
-# choosing k = 6
-
-set.seed(6)
-nmds6 <- metaMDS(sp_matrix2, distance = "bray", k = 6, autotransform = F, trymax = 500, 
-                 sratmax = 0.99999)  
-  # note that autotransformation is off (default = T) 
-
-nmds6
-  # stress = ~0.05118
-  # 6 dimensions 
-
-
-### Effect of Env Variables ----
-# removing unnecessary info from GIS data 
-gisvar2 <- gisvar %>% 
-              filter(!(plot_nr == 15)) %>% dplyr::select(!c(X, Y))
-
-# making environmental variable vectors for the plot 
-gisvar2 <- left_join(gisvar2, sites)  
-gisvar2 <- gisvar2 %>% 
-              dplyr::select(site_nr, ndvi, slope_deg, wetness, soil_depth, grazing_s) %>% 
-              mutate(grazing_m = grazing_s/60) %>% 
-              group_by(site_nr) %>% 
-              summarize(ndvi = mean(ndvi),
-                        slope_deg = mean(slope_deg),
-                        soil_depth = mean(soil_depth),
-                        wetness = mean(wetness),
-                        grazing_m = mean(grazing_m)) %>% 
-              ungroup() %>% 
-              dplyr::select(!site_nr)
-
-gisfit <- envfit(nmds6, gisvar2, permu = 999)
-gisfit   
-  # GIS variables don't have an effect, and neither does aspect or grazing 
-    # ndvi: R2 = 0.0268, p = 0.637
-    # slope: R2 = 0.1065, p = 0.169 
-    # wetness: R2 = 0.0004,  p = 0.988 
-    # soil depth: R2 = 0.0325, p = 0.608
-    # grazing: R2 = 0.0848, p = 0.240
-
-# . ----
-#### ANOSIM Tests ----
 ## For sp group ~ aspect 
 ano_a <- anosim(cov_matrix_sp, cov_matrix$aspect, distance = "bray", permutations = 9999)
 ano_a
-  # not significantly different (R = 0.01435, p = 0.2577)
+# not significantly different (R = 0.01435, p = 0.2577)
 
 ## For sp group ~ grazing category
 ano_g <- anosim(cov_matrix_sp, cov_matrix$grazing_cat, distance = "bray", permutations = 9999)
 ano_g
-  # not significantly different (R = -0.08811, p = 0.9864) 
+# not significantly different (R = -0.08811, p = 0.9864) 
 
-
-## For species ~ aspect  (USE THIS)
-ano_sp <- anosim(sp_matrix2, sp_matrix$aspect, distance = "bray", permutations = 9999)
-ano_sp
-  # ANOSIM R = 0.04279, p = 0.1167 (not significant)
-
-## For sp group ~ grazing category
-grazing_cat <- sites %>% dplyr::select(site_nr, grazing_cat) %>% distinct()
-
-ano_g2 <- anosim(sp_matrix2, grazing_cat$grazing_cat, distance = "bray", permutations = 9999)
-ano_g2 
-  # no difference 
-
-
-# . ----
-#### Autocorrelation Test ----
-## Seeing if my sites that are closer together are more similar than those further apart
-sites_m <- sites %>% filter(plot == 1) %>% dplyr::select(x_coord, y_coord)
-            
-# creating a geographic df with Haversine distance 
-sites_d <- distm(sites_m, fun = distHaversine)
-sites_dist <- as.dist(sites_d)
-
-# creating relative abundance df with Bray-Curtis distance
-sp_dist <- vegdist(sp_matrix2, method = "bray")
-
-
-# rel abundance vs location 
-mantel_sp <- mantel(sp_dist, sites_dist, method = "spearman", permutations = 9999, na.rm = TRUE)
-mantel_sp
-  # not spatially autocorrelated
-  # used the Spearman method (non-parametric)
-    # p = 0.2268 (not significant)
-    # Mantel statistic r = 0.04687

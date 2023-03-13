@@ -5,6 +5,7 @@
 
 ### Library ----
 library(tidyverse)
+library(viridis)
 
 
 #### Thesis Plot Theme ---- 
@@ -333,7 +334,7 @@ richness_site <- richness %>%
 
 
 # . ----
-#### NMDS Plot ----
+#### NMDS Plot (Site) ----
 ### Matrix preparation 
 sp_cov <- left_join(plots, coverage)
 sp_cov <- sp_cov %>% 
@@ -367,6 +368,7 @@ set.seed(6)
 nmds6 <- metaMDS(sp_matrix2, distance = "bray", k = 6, autotransform = F, trymax = 500, 
                  sratmax = 0.99999)  
 
+### Aspect ----
 # extracting NMDS scores (x and y coordinates)
 data.scores <- as.data.frame(scores(nmds6))
 species_scores <- as.data.frame(scores(nmds6, "species"))
@@ -376,12 +378,12 @@ data.scores$aspect <- sp_matrix$aspect
 
 NMDS <- data.frame(NMDS1 = nmds6$points[,1], NMDS2 = nmds6$points[,2], 
                     group = data.scores$aspect)
-NMDS$group <- as.factor(NMDSb$group)
+NMDS$group <- as.factor(NMDS$group)
 
-NMDS_mean <- aggregate(NMDSb[,1:2], list(group = NMDSb$group), "mean")
+NMDS_mean <- aggregate(NMDS[,1:2], list(group = NMDS$group), "mean")
 
 
-### Making the ellipsoids
+## Making the ellipsoids
 # function for ellipses
 veganCovEllipse <- function (cov, center = c(0, 0), scale = 1, npoints = 100) 
 {
@@ -403,31 +405,32 @@ for(g in levels(NMDS$group)){
 }  # run from here 
 
 
-### GIS variables 
+## GIS variables 
 # removing unnecessary info from GIS data 
 gisvar2 <- gisvar %>% 
               filter(!(plot_nr == 15)) %>% dplyr::select(!c(X, Y))
 
-# making environmental variable vectors for the plot 
-gisvar2 <- left_join(gisvar2, sites)  
-gisvar2 <- gisvar2 %>% 
-              dplyr::select(site_nr, ndvi, slope_deg, wetness, soil_depth, grazing_s) %>% 
-              mutate(grazing_m = grazing_s/60) %>% 
-              group_by(site_nr) %>% 
-              summarize(ndvi = mean(ndvi),
-                        slope_deg = mean(slope_deg),
-                        soil_depth = mean(soil_depth),
-                        wetness = mean(wetness),
-                        grazing_m = mean(grazing_m)) %>% 
-              ungroup() %>% 
-              dplyr::select(!site_nr)
+# making environmental variable vectors for the site 
+gisvar_long <- left_join(gisvar2, sites)  
+gisvar_long <- gisvar_long %>% mutate(grazing_m = grazing_s/60)
 
-gisfit <- envfit(nmds6, gisvar2, permu = 999)
+gisvar_sites <- gisvar_long %>% 
+                  dplyr::select(site_nr, ndvi, slope_deg, wetness, soil_depth, grazing_s) %>% 
+                  group_by(site_nr) %>% 
+                  summarize(ndvi = mean(ndvi),
+                            slope_deg = mean(slope_deg),
+                            soil_depth = mean(soil_depth),
+                            wetness = mean(wetness),
+                            grazing_m = mean(grazing_m)) %>% 
+                  ungroup() %>% 
+                  dplyr::select(!site_nr)
+
+gisfit <- envfit(nmds6, gisvar_sites, permu = 999)
 
 # gisarrows <- as.data.frame(scores(gisfit, "vectors"))    # use if significant env var 
 
 
-### NMDS Plot
+## NMDS Plot
 (nmds_plot <- ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) + 
                 geom_polygon(data = df_ell, aes(x = NMDS1, y = NMDS2, group = group,
                                                 color = group, fill = group), alpha = 0.2, 
@@ -447,3 +450,174 @@ gisfit <- envfit(nmds6, gisvar2, permu = 999)
                 scale_fill_manual(values = c("#458264", "#F4A460"),
                                   labels = c("N", "S"),
                                   name = "Aspect"))
+
+
+### Grazing Category ----
+# making grazing categories per site instead of plot
+grazecat <- sites %>% 
+              mutate(grazing_cat = as.numeric(grazing_cat)) %>% 
+              group_by(site_nr) %>% 
+              summarize(grazecat = mean(grazing_cat)) %>% 
+              mutate(grazecat = round(grazecat)) %>% 
+              mutate(grazecat = as.character(grazecat))
+
+# adding grazing to NMDS scores 
+data.scores$grazing <- grazecat$grazecat
+
+NMDSg <- data.frame(NMDS1 = nmds6$points[,1], NMDS2 = nmds6$points[,2], 
+                   group = data.scores$grazing)
+NMDSg$group <- as.factor(NMDSg$group)
+
+NMDSg_mean <- aggregate(NMDSg[,1:2], list(group = NMDSg$group), "mean")
+
+
+## Making the ellipsoids
+ordg <- ordiellipse(nmds6, data.scores$grazing, label = T, conf = 0.95)
+
+df_ellg <- data.frame()   # run from here (this side)
+
+for(g in levels(NMDSg$group)){
+  df_ellg <- rbind(df_ellg, 
+                  cbind(as.data.frame(with(NMDSg[NMDSg$group==g,],
+                                           veganCovEllipse(ordg[[g]]$cov, ordg[[g]]$center,
+                                                           ordg[[g]]$scale)))
+                        ,group=g))
+}  # run from here 
+
+
+## NMDS Plot
+(nmds_plot2 <- ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) + 
+                  geom_polygon(data = df_ellg, aes(x = NMDS1, y = NMDS2, group = group,
+                                                  color = group, fill = group), alpha = 0.2, 
+                               size = 0.5, linetype = 1) +
+                  geom_point(aes(color = grazing, fill = grazing), 
+                             size = 2, alpha = 0.6) +
+                  #   geom_text(data = species_scores, aes(x = NMDS1, y = NMDS2, label = species),
+                  #            alpha = 0.5, size = 2) +
+                  theme_thesis + 
+                  labs(x = "NMDS1", y = "NMDS2"))
+
+
+#### NMDS Plot (Plots) ----
+### Matrix preparation 
+sp_cov2 <- left_join(plots, coverage)
+sp_cov2 <- sp_cov2 %>% 
+              dplyr::select(site_nr, plot_nr, plot_rep, aspect, sp_latin, sp_group, coverage_perc) %>% 
+              group_by(plot_nr, sp_group) %>% 
+              mutate(rel_abund = coverage_perc/length(sp_group)) %>% 
+              ungroup() %>% 
+              na.omit() %>% 
+              dplyr::select(!c(coverage_perc, sp_group))
+
+# matrix 
+sp_matrix3 <- sp_cov2 %>% 
+                distinct() %>% 
+                pivot_wider(names_from = "sp_latin", values_from = "rel_abund", 
+                            values_fill = NA)
+
+sp_matrix3[is.na(sp_matrix3)] <- 0  # making sure non-existent sp just have coverage of 0
+
+# matrix with only abundance data 
+sp_matrix4 <- sp_matrix3 %>% 
+                dplyr::select(!c(site_nr, plot_nr, plot_rep, aspect)) 
+
+
+### Running the NMDS
+set.seed(7)
+nmds7 <- metaMDS(sp_matrix4, distance = "bray", k = 7, autotransform = F, trymax = 500, 
+                 sratmax = 0.99999)  
+
+### Aspect ----
+# extracting NMDS scores (x and y coordinates)
+data.scoresb <- as.data.frame(scores(nmds7))
+species_scoresb <- as.data.frame(scores(nmds7, "species"))
+species_scoresb$species <- rownames(species_scoresb)
+
+data.scoresb$aspect <- sp_matrix3$aspect
+data.scoresb$plot_nr <- sp_matrix3$plot_nr
+data.scoresb$site_nr <- sp_matrix3$site_nr
+data.scoresb$plot_rep <- sp_matrix3$plot_rep
+
+
+NMDSplot <- data.frame(NMDS1 = nmds7$points[,1], NMDS2 = nmds7$points[,2], 
+                       group = data.scoresb$aspect)
+NMDSplot$group <- as.factor(NMDSplot$group)
+
+NMDSplot_mean <- aggregate(NMDSplot[,1:2], list(group = NMDSplot$group), "mean")
+
+
+## Making the ellipsoids
+ord2 <- ordiellipse(nmds7, data.scoresb$aspect, label = T, conf = 0.95)
+
+df_ell2 <- data.frame()   # run from here (this side)
+
+for(g in levels(NMDSplot$group)){
+  df_ell2 <- rbind(df_ell2, 
+                  cbind(as.data.frame(with(NMDSplot[NMDSplot$group==g,],
+                                           veganCovEllipse(ord2[[g]]$cov, ord2[[g]]$center,
+                                                           ord2[[g]]$scale)))
+                        ,group=g))
+}
+
+
+## GIS variables 
+# removing unnecessary info from GIS data 
+gisvar_plots <- gisvar_long %>%  
+                  dplyr::select(plot_nr, ndvi, slope_deg, wetness, soil_depth, grazing_m) 
+
+gisfit2 <- envfit(nmds7, gisvar_plots, permu = 999)
+gisfit2 
+
+gisarrows2 <- as.data.frame(scores(gisfit2, "vectors") * ordiArrowMul(gisfit2))
+
+# removing non-significant variables 
+remove <- c("soil_depth", "grazing_m")
+gisarrows2 <- gisarrows2[!(row.names(gisarrows2) %in% remove),]
+
+
+## NMDS Plot
+(nmds_plot3 <- ggplot(data.scoresb, aes(x = NMDS1, y = NMDS2)) + 
+                  geom_polygon(data = df_ell2, aes(x = NMDS1, y = NMDS2, group = group,
+                                                   color = group, fill = group), alpha = 0.2, 
+                               size = 0.5, linetype = 1) +
+                  geom_point(aes(color = aspect, shape = aspect, fill = aspect), 
+                             size = 2, alpha = 0.6) +
+                  #   geom_text(data = species_scores, aes(x = NMDS1, y = NMDS2, label = species),
+                  #            alpha = 0.5, size = 2) +
+                  geom_segment(aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2), 
+                               data = gisarrows2, size = 1, alpha = 0.7, colour = "grey40",
+                               arrow = arrow(length = unit(0.25, "cm"))) +
+                  geom_text(data = gisarrows2, aes(x = NMDS1, y = NMDS2), colour = "grey40", 
+                            label = row.names(gisarrows2)) + 
+                  theme_thesis + 
+                  labs(x = "NMDS1", y = "NMDS2") +
+                  scale_color_manual(values = c("#458264", "#F4A460"),
+                                     labels = c("N", "S"),
+                                     name = "Aspect") +
+                  scale_shape_manual(values = c(21, 22),
+                                     labels = c("N", "S"),
+                                     name = "Aspect") +
+                  scale_fill_manual(values = c("#458264", "#F4A460"),
+                                    labels = c("N", "S"),
+                                    name = "Aspect"))
+
+# without aspect
+data.scoresb <- data.scoresb %>% 
+                  mutate(site_nr2 = as.numeric(site_nr)) %>% 
+                  mutate(plot_rep2 = case_when(plot_rep == "1" ~ "A",
+                                               plot_rep == "2" ~ "B",
+                                               plot_rep == "3" ~ "C")) %>% 
+                  mutate(site_plot = str_c(site_nr, "", plot_rep2))
+
+(nmds_plot4 <- ggplot(data.scoresb, aes(x = NMDS1, y = NMDS2)) + 
+                  geom_text(aes(label = site_plot, color = site_nr2), size = 3) +
+                  #   geom_text(data = species_scores, aes(x = NMDS1, y = NMDS2, label = species),
+                  #            alpha = 0.5, size = 2) +
+                  geom_segment(aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2), 
+                               data = gisarrows2, size = 1, alpha = 0.7, colour = "grey20",
+                               arrow = arrow(length = unit(0.25, "cm"))) +
+                  geom_text(data = gisarrows2, aes(x = NMDS1, y = NMDS2), colour = "grey20", 
+                            label = row.names(gisarrows2)) + 
+                  theme_thesis + 
+                  labs(x = "NMDS1", y = "NMDS2")) +
+                  scale_color_viridis_c(option = "plasma")
