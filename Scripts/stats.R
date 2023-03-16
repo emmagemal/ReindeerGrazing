@@ -212,6 +212,16 @@ coverage <- left_join(coverage, gisvar)
 str(richness)
 str(coverage)
 
+## Only grazing and GIS variables 
+plot_grazing <- left_join(sites, gisvar)
+str(plot_grazing)
+
+plot_grazing <- plot_grazing %>% 
+                    dplyr::select(site_nr, plot_nr, grazing_s, aspect, ndvi, slope_deg, wetness,
+                                  soil_depth, ndvi_s, wetness_s, slope_deg_s, soil_depth_s) %>% 
+                    mutate(grazing_m = grazing_s/60)
+
+
 ### Creating summary dataframes ----
 coverage_site <- coverage %>% 
                     group_by(site_nr) %>% 
@@ -231,6 +241,7 @@ coverage_site <- coverage %>%
                               grazing_m = mean(grazing_m))
 coverage_site <- as.data.frame(coverage_site)
 str(coverage_site)
+
 
 richness_site <- richness %>% 
                     group_by(site_nr) %>% 
@@ -389,6 +400,16 @@ ggplot(coverage_site, aes(x = ndvi, y = coverage_perc)) +  # coverage + sp group
   facet_wrap(~aspect)
 
 ## NDVI + Grazing ----
+ggplot(richness, aes(x = grazing_m, y = ndvi)) +  # NDVI ~ grazing 
+  geom_point() +
+  stat_smooth(method = "lm") 
+
+ggplot(richness, aes(x = grazing_m, y = ndvi)) +  # NDVI ~ grazing + aspect 
+  geom_point(aes(color = aspect)) +
+  stat_smooth(method = "lm", aes(color = aspect)) +
+  facet_wrap(~aspect)
+
+
 ggplot(richness_site, aes(x = grazing_m, y = richness_siteT)) +   # richness + ndvi + aspect
   geom_point(aes(color = ndvi)) +
   facet_wrap(~aspect)
@@ -408,10 +429,6 @@ ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +   # coverage + nd
 ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +   # coverage + ndvi + aspect + sp group
   geom_point(aes(color = ndvi)) +
   facet_wrap(~aspect + sp_group)
-
-ggplot(richness_site, aes(x = grazing_m, y = ndvi)) +   # grazing vs. ndvi
-  geom_point(aes(color = aspect)) +
-  stat_smooth(method = "lm", aes(color = aspect))
 
 ## Slope ----
 ggplot(richness_site, aes(y = slope_deg, x = aspect)) +  # slope by aspect 
@@ -448,6 +465,16 @@ ggplot(coverage_site, aes(x = slope_deg, y = coverage_perc)) +  # coverage + sp 
   facet_wrap(~aspect, scales = "free_x")
 
 ## Slope + Grazing ----
+ggplot(richness, aes(x = grazing_m, y = slope_deg)) +  # slope ~ grazing 
+  geom_point() +
+  stat_smooth(method = "lm") 
+
+ggplot(richness, aes(x = grazing_m, y = slope_deg)) +  # slope ~ grazing + aspect 
+  geom_point(aes(color = aspect)) +
+  stat_smooth(method = "lm", aes(color = aspect)) +
+  facet_wrap(~aspect)
+
+
 ggplot(richness_site, aes(x = grazing_m, y = richness_siteT)) +   # richness + slope + aspect
   geom_point(aes(color = slope_deg)) +
   facet_wrap(~aspect)
@@ -467,10 +494,6 @@ ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +   # coverage + sl
 ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +   # coverage + slope + aspect + sp group
   geom_point(aes(color = slope_deg)) +
   facet_wrap(~aspect + sp_group)
-
-ggplot(richness_site, aes(x = grazing_m, y = slope_deg)) +   # grazing vs. slope 
-  geom_point(aes(color = aspect)) +
-  stat_smooth(method = "lm", aes(color = aspect))
 
 ## Soil Depth ----
 ggplot(richness_site, aes(y = soil_depth, x = aspect)) +  # slope by aspect 
@@ -546,6 +569,16 @@ ggplot(coverage_site, aes(x = wetness, y = coverage_perc)) +  # coverage + sp gr
   facet_wrap(~aspect, scales = "free_x")
 
 ## Wetness + Grazing ----
+ggplot(richness, aes(x = grazing_m, y = wetness)) +  # wetness ~ grazing 
+  geom_point() +
+  stat_smooth(method = "lm") 
+
+ggplot(richness, aes(x = grazing_m, y = wetness)) +  # wetness ~ grazing + aspect 
+  geom_point(aes(color = aspect)) +
+  stat_smooth(method = "lm", aes(color = aspect)) +
+  facet_wrap(~aspect)
+
+
 ggplot(richness_site, aes(x = grazing_m, y = richness_siteT)) +   # richness + wetness + aspect
   geom_point(aes(wetness)) +
   facet_wrap(~aspect)
@@ -566,12 +599,8 @@ ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +   # coverage + we
   geom_point(aes(color = wetness)) +
   facet_wrap(~aspect + sp_group)
 
-ggplot(richness_site, aes(x = grazing_m, y = wetness)) +   # grazing vs. wetness 
-  geom_point(aes(color = aspect)) +
-  stat_smooth(method = "lm", aes(color = aspect))
-
 # . ----
-#### Models ----
+#### Vegetation Models ----
 ggcorr(richness_site, label = T, label_alpha = T)  
   # slope  and soil depth = quite well negatively correlated (-0.6)
     # soil depth is a very low resolution, so maybe exclude this from models
@@ -583,7 +612,6 @@ ggcorr(richness_site, label = T, label_alpha = T)
 
 # checking assumptions
 hist(richness_site2$richness_siteT)  # maybe bimodal  
-hist(richness_site2$grazing_m)
 
 rg1 <- lm(richness_siteT ~ grazing_m, data = richness_site2)
 plot(rg1)
@@ -1070,21 +1098,21 @@ summary(hgnw)  # adjusted R2 = 0.2972, not quite as good so going with 'hgws'
 
 ## Richness Proportion Model Results ## ----
 # LICHEN = lm(log(rich_propT) ~ grazing_m*aspect + ndvi
-
 summary(lgan_log3)      ## USE THIS MODEL'S RESULTS ##
   # aspect NORTH (intercept): exp(-0.988860) ± exp(0.095693)
   # aspect SOUTH: exp(0.246075) ± exp(0.106666), p = 0.0284 (SIGNIFICANT)
   # grazing NORTH: exp(0.001364) ± exp(0.005686), p = 0.8121 (not significant) 
-  # ndvi: exp(-2.974119) ± exp(0.644816), p = 7.44e-05 (SIGNFICANT)    
   # grazing*aspect SOUTH: exp(-0.015027) ± exp(0.008055), p = 0.0722 (not significant)
+  # ndvi: exp(-2.974119) ± exp(0.644816), p = 7.44e-05 (SIGNFICANT)    
 # adjusted R2 = 0.3918 
+
+summary(glm(rich_propT ~ grazing_m*aspect + ndvi, data = lichen))
 
 # checking residuals 
 plot(residuals(lgan_log3) ~ predict(lgan_log3, type = "response"))  # looks good 
 
 
 # MOSS = lm(rich_propT ~ grazing_m + aspect + ndvi_s + wetness_s)
-
 summary(mganw)      ## USE THIS MODEL'S RESULTS ##
   # aspect NORTH (intercept): 0.1942 ± 0.01427
   # aspect SOUTH: -2.670e-02 ± 1.601e-02, p = 0.1063 (not significant)
@@ -1098,7 +1126,6 @@ plot(residuals(mganw) ~ predict(mganw, type = "response"))  # not fantastic but 
 
 
 # SHRUB = lm(rich_propT ~ grazing_m*aspect + wetness)
-
 summary(sgaw3)      ## USE THIS MODEL'S RESULTS ##
   # aspect NORTH (intercept): 0.2277240 ± 0.0218229
   # aspect SOUTH: 0.0875288 ± 0.0303873, p = 0.00739 (SIGNIFICANT)
@@ -1109,7 +1136,6 @@ summary(sgaw3)      ## USE THIS MODEL'S RESULTS ##
 
 
 # GRASS = lm(rich_propT ~ grazing_m * aspect + wetness * aspect)
-
 summary(ggaw4)      ## USE THIS MODEL'S RESULTS ##
   # aspect NORTH (intercept): 0.1245445 ± 0.0188888
   # aspect SOUTH: -0.0112339 ± 0.0263743, p = 0.67341 (not significant)
@@ -1121,7 +1147,6 @@ summary(ggaw4)      ## USE THIS MODEL'S RESULTS ##
 
 
 # HERB = lm(rich_propT ~ grazing_m + wetness_s + slope_deg_s)
-
 summary(hgws)      ## USE THIS MODEL'S RESULTS ##
   # intercept: 0.1497099 ± 0.0148025
   # grazing: -0.0001041 ± 0.0011310, p = 0.92733 (not significant)
@@ -1130,339 +1155,249 @@ summary(hgws)      ## USE THIS MODEL'S RESULTS ##
 # adjusted R2 = 0.3007
 
 
-### Height ~ Grazing ----
-hist(richness_site2$height_site)  # right skewed (positive skew)
-head(richness_site2$height_site)
-
-# testing to use another distribution
-richness_site2 <- richness_site2 %>% 
-                    mutate(height_int = round(height_site*1000))
-
-hganw_poi <- glm(height_int ~ grazing_m + aspect + ndvi + wetness, family = "poisson", 
-                 data = richness_site2)
-hganw_nb <- glm.nb(height_int ~ grazing_m + aspect + ndvi + wetness, 
-                   data = richness_site2)
-
-plot(hganw_poi)
-plot(hganw_nb)
-summary(hganw_poi)  # residual deviance >> DF = likely overdispersed 
-summary(hganw_nb)  # residual deviance and DF = very similar = not overdispersed = better
-  # intercept: exp(7.773465)   (DIVIDE BY 1000 TO BACKTRANSFORM!!)
-  # 
-
-summary()
-
-
-
-hg1 <- lm(height_site ~ grazing_m, data = richness_site2)
-plot(hg1)
-shapiro.test(resid(hg1))   # p < 0.05 = not normal (skewed)
-bptest(hg1)  # p > 0.05 = no heteroskedasticity though 
-
-## Transformations 
-# log
-hg2 <- lm(log(height_site) ~ grazing_m, data = richness_site2)
-plot(hg2)
-shapiro.test(resid(hg2))   # p < 0.05 = not normal
-bptest(hg2)  # p > 0.05 = no heteroskedasticity 
-
-# sqrt 
-hg3 <- lm(sqrt(height_site) ~ grazing_m, data = richness_site2)
-plot(hg3)
-shapiro.test(resid(hg3))   # p < 0.05 = not normal, almost worse 
-bptest(hg3)  # p > 0.05 = no heteroskedasticity 
-
-# box-cox 
-bc <- boxcox(hg1)
-(lambda <- bc$x[which.max(bc$y)])  # extracting exact lambda for transformation 
-
-hg4 <- lm(((height_site^lambda-1)/lambda) ~ grazing_m, data = richness_site2)
-plot(hg4)
-shapiro.test(resid(hg4))   # p < 0.05 = not normal, nothing works 
-bptest(hg4)  # p > 0.05 = no heteroskedasticity 
-
-
-## GLM    
-hg_glm <- glm(height_site ~ grazing_m, family = Gamma(link = log), data = richness_site2)
-hist(resid(hg_glm))  # without 'Gamma' distribution it wasn't super normal 
-
-
-### Models with aspect 
-hga1 <- lm(height_site ~ grazing_m + aspect, data = richness_site2)
-plot(hga1)
-shapiro.test(resid(hga1))   # p < 0.05 = not normal 
-bptest(hga1)  # p < 0.05 = and heteroskedasticity 
-
-hga_glm <- glm(height_site ~ grazing_m + aspect, family = Gamma(link = log), data = richness_site2)
-hist(resid(hga_glm))
-
-hga_glm2 <- glm(height_site ~ grazing_m*aspect, family = Gamma(link = log), data = richness_site2)
-hist(resid(hga_glm2))
-
-AIC(hg_glm, hga_glm, hga_glm2)  # 'hga_glm2' is best
-
-
-### Models with GIS variables (+ aspect)
-## NDVI
-hgan <- glm(height_site ~ grazing_m + aspect + ndvi, family = Gamma(link = log), data = richness_site2)
-hgan2 <- glm(height_site ~ grazing_m + aspect*ndvi, family = Gamma(link = log), data = richness_site2)
-hgan3 <- glm(height_site ~ grazing_m*aspect + ndvi, family = Gamma(link = log), data = richness_site2)
-hgan4 <- glm(height_site ~ grazing_m*aspect + ndvi*aspect, family = Gamma(link = log), 
-             data = richness_site2)
-hgan5 <- glm(height_site ~ grazing_m*aspect*ndvi, family = Gamma(link = log), data = richness_site2)
-
-AIC(hga_glm2, hgan, hgan2, hgan3, hgan4, hgan5)  # 'hgan3' is best 
-
-## Slope
-hgas <- glm(height_site ~ grazing_m + aspect + slope_deg, family = Gamma(link = log), 
-            data = richness_site2)
-hgas2 <- glm(height_site ~ grazing_m + aspect*slope_deg, family = Gamma(link = log), 
-             data = richness_site2)
-hgas3 <- glm(height_site ~ grazing_m*aspect + slope_deg, family = Gamma(link = log), 
-             data = richness_site2)
-hgas4 <- glm(height_site ~ grazing_m*aspect + slope_deg*aspect, family = Gamma(link = log), 
-             data = richness_site2)
-hgas5 <- glm(height_site ~ grazing_m*aspect*slope_deg, family = Gamma(link = log), 
-             data = richness_site2)
-
-AIC(hga_glm2, hgan3, hgas, hgas2, hgas3, hgas4, hgas5)  # 'hgan3' is still best 
-
-## Wetness
-hgaw <- glm(height_site ~ grazing_m + aspect + wetness, family = Gamma(link = log), 
-            data = richness_site2)
-hgaw2 <- glm(height_site ~ grazing_m + aspect*wetness, family = Gamma(link = log), 
-             data = richness_site2)
-hgaw3 <- glm(height_site ~ grazing_m*aspect + wetness, family = Gamma(link = log), 
-             data = richness_site2)
-hgaw4 <- glm(height_site ~ grazing_m*aspect + wetness*aspect, family = Gamma(link = log), 
-             data = richness_site2)
-hgaw5 <- glm(height_site ~ grazing_m*aspect*wetness, family = Gamma(link = log), 
-             data = richness_site2)
-
-AIC(hga_glm2, hgan3, hgaw, hgaw2, hgaw3, hgaw4, hgaw5)  # 'hgan3' is still best 
-
-
-## NDVI + 1 other
-hgans <- glm(height_site ~ grazing_m + aspect + ndvi + slope_deg, family = Gamma(link = log), 
-             data = richness_site2)
-hganw <- glm(height_site ~ grazing_m + aspect + ndvi + wetness, family = Gamma(link = log), 
-             data = richness_site2)
-
-AIC(hgan3, hgans, hganw)  # 'hganw' = best 
-
-
-## Choosing the best model 
-h_null <- glm(height_site ~ 1, family = Gamma(link = log), data = richness_site2)
-
-AIC(hgan3, hganw, h_null)   # 'hganw' is best
-
-
-## Height Model Results ## ----
-# height_site ~ grazing_m * aspect + ndvi + wetness, family = Gamma(link = log)
-
-summary(hganw)        ## USE THIS MODEL'S RESULTS ##
-  # grazing NORTH: 2.7^(-0.007511) ± 2.7^(0.004852), p = 0.124 (not significant)
-  # grazing*aspect SOUTH: 2.7^(0.016494) ± 2.7^(0.007022), p = 0.0200 (SIGNIFICANT)
-  # ndvi: 2.7^(5.541403) ± 2.7^(0.549923), p = < 2e-16 (SIGNIFICANT)
-  # wetness: 2.7^(-0.009523) ± 2.7^(0.001767), p = 2.46e-07 (SIGNIFICANT)
-  
-# calculating McFadden's R2 
-with(summary(hganw2), 1 - deviance/null.deviance)  # R2 = 0.5331 (a good model)
-
-# checking residuals 
-plot(residuals(hganwsd14) ~ predict(hganwsd14, type = "response")) 
-
-
-# testing if any "outliers" effect the relationships
-test <- richness_site %>% filter(wetness < 50)
-ggplot(test, aes(x = wetness, y = height_site)) +  # height + aspect
-  geom_point(aes(color = aspect)) +
-  stat_smooth(method = "lm", aes(color = aspect))
-
-hganwsd14t <- glm(height_site ~ grazing_m*aspect + ndvi*aspect + wetness*aspect + slope_deg*aspect + 
-                    soil_depth*aspect, family = Gamma(link = log), data = test)
-summary(hganwsd14t)  # now grazing S is significant, NDVI differs between N and S, etc. 
-
-
-### Coverage ~ Grazing ----
-ggplot(coverage_site, aes(x = coverage_perc)) +
-  geom_histogram() +
-  facet_wrap(~sp_group)   # zero-inflated/ lots of low values 
-
-cg1 <- lm(coverage_perc ~ grazing_m + sp_group, data = coverage_site)
-plot(cg1)
-hist(resid(cg1))
-shapiro.test(resid(cg1))   # p < 0.05 = not normal 
-bptest(cg1)  # p < 0.05 = and heteroskedasticity   
-
-cg2 <- lm(coverage_perc ~ grazing_m*sp_group, data = coverage_site)   # int. makes more sense 
-plot(cg2)
-shapiro.test(resid(cg2))   # p < 0.05 = not normal 
-bptest(cg2)  # p < 0.05 = and heteroskedasticity   
-
-## Transformations 
-# log
-cg3 <- lm(log(coverage_perc) ~ grazing_m*sp_group, data = coverage_site)
-plot(cg3)
-shapiro.test(resid(cg3))   # p < 0.05 = not normal
-bptest(cg3)  # p < 0.05 = and heteroskedasticity 
-
-# sqrt 
-cg4 <- lm(sqrt(coverage_perc) ~ grazing_m*sp_group, data = coverage_site)
-plot(cg4)
-shapiro.test(resid(cg4))   # p > 0.05 = normal
-bptest(cg4)  # p < 0.05 = but heteroskedasticity 
-
-# box-cox 
-bc2 <- boxcox(cg1)
-(lambda2 <- bc2$x[which.max(bc2$y)])  # extracting exact lambda for transformation 
-
-cg5 <- lm(((coverage_perc^lambda2-1)/lambda2) ~ grazing_m*sp_group, data = coverage_site)
-plot(cg5)
-shapiro.test(resid(cg5))   # p > 0.05 = normal
-bptest(cg5)  # p < 0.05 = no heteroskedasticity 
-summary(cg5)
-
-
-## GLM
-cg_glm <- glm(coverage_perc ~ grazing_m*sp_group, data = coverage_site)
-hist(resid(cg_glm))  # looks pretty 'normal' (can use Gaussian)
-summary(cg_glm)     
-
-
-### Models with aspect
-cga1 <- lm(coverage_perc ~ grazing_m*sp_group*aspect, data = coverage_site)
-plot(cga1)
-shapiro.test(resid(cga1))   # p < 0.05 = not normal, can't use it 
-bptest(cga1)  # p < 0.05 = and heteroskedasticity 
-
-cga_glm <- glm(coverage_perc ~ grazing_m + sp_group + aspect, data = coverage_site)
-hist(resid(cga_glm))   # gaussian works 
-
-cga_glm2 <- glm(coverage_perc ~ grazing_m*sp_group + aspect, data = coverage_site)
-cga_glm3 <- glm(coverage_perc ~ grazing_m*aspect + sp_group, data = coverage_site)
-cga_glm4 <- glm(coverage_perc ~ grazing_m + sp_group*aspect, data = coverage_site)
-cga_glm5 <- glm(coverage_perc ~ grazing_m*sp_group*aspect, data = coverage_site)
-
-AIC(cg_glm, cga_glm, cga_glm2, cga_glm3, cga_glm4, cga_glm5)   # best is 'cga_glm' (no interaction)
-
-
-### Models with GIS variables (+ aspect)
-# avoiding interactions with sp_group due to the small amount of data 
-## NDVI
-cgan <- glm(coverage_perc ~ grazing_m + sp_group + aspect + ndvi, data = coverage_site)
-can <- glm(coverage_perc ~ grazing_m + sp_group + ndvi, data = coverage_site)
-cgn <- glm(coverage_perc ~ grazing_m + aspect + ndvi, data = coverage_site)
-cgn2 <- glm(coverage_perc ~ grazing_m + aspect*ndvi, data = coverage_site)
-cgn3 <- glm(coverage_perc ~ grazing_m*aspect + ndvi, data = coverage_site)
-cgn4 <- glm(coverage_perc ~ grazing_m*aspect + ndvi*aspect, data = coverage_site)
-cgan2 <- glm(coverage_perc ~ grazing_m + sp_group + ndvi*aspect, data = coverage_site)
-cgan3 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + ndvi*aspect, data = coverage_site)
-cgan4 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + ndvi, data = coverage_site)
-
-min(AIC(cga_glm, cgan, cgan2, cgan3, cgan4, can, cgn, cgn2, cgn3, cgn4)[,2])   # lowest == 1361.371 
-AIC(cga_glm, cgan, cgan2, cgan3, cgan4, can, cgn, cgn2, cgn3, cgn4)  # 'cga_glm' or 'can' is best 
-
-## Slope
-cgas <- glm(coverage_perc ~ grazing_m + sp_group + aspect + slope_deg, data = coverage_site)
-cas <- glm(coverage_perc ~ grazing_m + sp_group + slope_deg, data = coverage_site)
-cgs <- glm(coverage_perc ~ grazing_m + aspect + slope_deg, data = coverage_site)
-cgs2 <- glm(coverage_perc ~ grazing_m + aspect*slope_deg, data = coverage_site)
-cgs3 <- glm(coverage_perc ~ grazing_m*aspect + slope_deg, data = coverage_site)
-cgs4 <- glm(coverage_perc ~ grazing_m*aspect + slope_deg*aspect, data = coverage_site)
-cgan2 <- glm(coverage_perc ~ grazing_m + sp_group + slope_deg*aspect, data = coverage_site)
-cgas3 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + slope_deg*aspect, data = coverage_site)
-cgas4 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + slope_deg, data = coverage_site)
-
-min(AIC(cga_glm, cgas, cgas2, cgas3, cgas4, cas, cgs, cgs2, cgs3, cgs4)[,2])   # lowest == 1361.371 
-AIC(cga_glm, cgas, cgas2, cgas3, cgas4, cas, cgs, cgs2, cgs3, cgs4)  # 'cga_glm' or 'cas' is best 
-
-## Soil depth
-cgad <- glm(coverage_perc ~ grazing_m + sp_group + aspect + soil_depth, data = coverage_site)
-cad <- glm(coverage_perc ~ grazing_m + sp_group + soil_depth, data = coverage_site)
-cgd <- glm(coverage_perc ~ grazing_m + aspect + soil_depth, data = coverage_site)
-cgd2 <- glm(coverage_perc ~ grazing_m + aspect*soil_depth, data = coverage_site)
-cgd3 <- glm(coverage_perc ~ grazing_m*aspect + soil_depth, data = coverage_site)
-cgd4 <- glm(coverage_perc ~ grazing_m*aspect + soil_depth*aspect, data = coverage_site)
-cgaw2 <- glm(coverage_perc ~ grazing_m + sp_group + soil_depth*aspect, data = coverage_site)
-cgad3 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + soil_depth*aspect, data = coverage_site)
-cgad4 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + soil_depth, data = coverage_site)
-
-min(AIC(cga_glm, cgad, cgad2, cgad3, cgad4, cad, cgd, cgd2, cgd3, cgd4)[,2])   # lowest == 1361.371 
-AIC(cga_glm, cgad, cgad2, cgad3, cgad4, cad, cgd, cgd2, cgd3, cgd4)  # 'cga_glm' or 'cad' is best
-
-## Wetness
-cgaw <- glm(coverage_perc ~ grazing_m + sp_group + aspect + wetness, data = coverage_site)
-caw <- glm(coverage_perc ~ grazing_m + sp_group + wetness, data = coverage_site)
-cgw <- glm(coverage_perc ~ grazing_m + aspect + wetness, data = coverage_site)
-cgw2 <- glm(coverage_perc ~ grazing_m + aspect*wetness, data = coverage_site)
-cgw3 <- glm(coverage_perc ~ grazing_m*aspect + wetness, data = coverage_site)
-cgw4 <- glm(coverage_perc ~ grazing_m*aspect + wetness*aspect, data = coverage_site)
-cgaw2 <- glm(coverage_perc ~ grazing_m + sp_group + wetness*aspect, data = coverage_site)
-cgaw3 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + wetness*aspect, data = coverage_site)
-cgaw4 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + wetness, data = coverage_site)
-
-min(AIC(cga_glm, cgaw, cgaw2, cgaw3, cgaw4, caw, cgw, cgw2, cgw3, cgw4)[,2])   # lowest == 1361.303 
-AIC(cga_glm, cgaw, cgaw2, cgaw3, cgaw4, caw, cgw, cgw2, cgw3, cgw4)  # 'cga_glm' or 'caw' is best 
-
-# comparing to each variable
-AIC(cga_glm, can, cas, cad, caw)  # all pretty much identical, none of GIS ones have 'aspect'
-
-
-## Combination testing 
-canw <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + wetness, data = coverage_site)
-cans <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + slope_deg, data = coverage_site)
-cand <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + soil_depth, data = coverage_site)
-
-canws <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + wetness + slope_deg, data = coverage_site)
-canwd <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + wetness + soil_depth, data = coverage_site)
-
-canwsd <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + wetness + slope_deg + 
-              soil_depth, data = coverage_site)
-
-AIC(cga_glm, canw, cans, cand, canws, canwd, canwsd)  # 'cga_glm' is best, GIS var don't add  
-
-
-## Choosing the best model
-c_null <- glm(coverage_perc ~ 1, data = coverage_site)
-AIC(cga_glm, c_null)
-
-## Coverage Model Results ## ----
-# glm(coverage_perc ~ grazing_m + sp_group + aspect)
-
-summary(cga_glm)   ## USE THIS MODEL'S RESULTS ##
-  # 6.75333 ± 2.9027
-  # grazing: -0.01039 ± 0.1297, p = 0.9363    
-  # herb: -5.14391 ± 3.42615, p = 0.1352    
-  # lichen: 16.96416 ± 3.37309, p = 1.31e-06 (SIGNIFICANT)
-  # moss: 4.7241 ± 3.39892, p = 0.1665    
-  # shrub: 50.31285 ± 3.37309, p = < 2e-16 (SIGNIFICANT)
-  # aspect SOUTH: 0.16916 ± 2.15598, p = 0.9376    
-
-# calculating McFadden's R2 
-with(summary(cga_glm), 1 - deviance/null.deviance)  # R2 = 0.6819 (very good model)
-
-# checking residuals 
-plot(residuals(cga_glm) ~ predict(cga_glm, type = "response"))  # a pattern, but due to sp. groups
+# . ----
+#### Landscape Models ----
+### Grazing ~ Landscape ----
+hist(plot_grazing$grazing_m)  # a bit skewed
+
+# wetness
+gw <- lm(grazing_m ~ wetness, data = plot_grazing)
+hist(resid(gw))
+plot(gw)  # looks like I have a bit of an outlier
+shapiro.test(resid(gw))  # not normal
+bptest(gw)  # no heteroskedasticity
+
+# wetness + aspect
+gwa <- lm(grazing_m ~ wetness + aspect, data = plot_grazing)
+shapiro.test(resid(gwa))  # not normal
+bptest(gwa)  # no heteroskedasticity
+
+gwa2 <- lm(grazing_m ~ wetness * aspect, data = plot_grazing)
+shapiro.test(resid(gwa2))  # not normal
+bptest(gwa2)  # no heteroskedasticity
+
+# NDVI
+gn <- lm(grazing_m ~ ndvi, data = plot_grazing)
+plot(gn)  
+shapiro.test(resid(gn))  # not normal
+bptest(gn)  # no heteroskedasticity though
+
+# NDVI + aspect
+gna <- lm(grazing_m ~ ndvi + aspect, data = plot_grazing)
+shapiro.test(resid(gna))  # not normal
+bptest(gna)  # no heteroskedasticity though
+
+gna2 <- lm(grazing_m ~ ndvi * aspect, data = plot_grazing)
+shapiro.test(resid(gna2))  # not normal
+bptest(gna2)  # no heteroskedasticity though
+
+# slope
+gs <- lm(grazing_m ~ slope_deg, data = plot_grazing)
+plot(gs)  
+shapiro.test(resid(gs))  # not normal
+bptest(gs)  # no heteroskedasticity
+
+# slope + aspect
+gsa <- lm(grazing_m ~ slope_deg + aspect, data = plot_grazing)
+shapiro.test(resid(gsa))  # not normal
+bptest(gsa)  # no heteroskedasticity
+
+gsa2 <- lm(grazing_m ~ slope_deg * aspect, data = plot_grazing)
+shapiro.test(resid(gsa2))  # not normal
+bptest(gsa2)  # and heteroskedasticity
+
+### Transformations
+## log
+# wetness
+gw_log <- lm(log(grazing_m) ~ wetness, data = plot_grazing)
+shapiro.test(resid(gw_log))  # not normal
+bptest(gw_log)  # no heteroskedasticity though
+
+gwa_log <- lm(log(grazing_m) ~ wetness + aspect, data = plot_grazing)
+shapiro.test(resid(gwa_log))  # not normal
+bptest(gwa_log)  # no heteroskedasticity though
+
+gwa_log2 <- lm(log(grazing_m) ~ wetness * aspect, data = plot_grazing)
+shapiro.test(resid(gwa_log2))  # not normal
+bptest(gwa_log2)  # no heteroskedasticity though
+
+# NDVI
+gn_log <- lm(log(grazing_m) ~ ndvi, data = plot_grazing)
+shapiro.test(resid(gn_log))  # not normal
+bptest(gn_log)  # no heteroskedasticity though
+
+gna_log <- lm(log(grazing_m) ~ ndvi + aspect, data = plot_grazing)
+shapiro.test(resid(gna_log))  # not normal 
+bptest(gna_log)  # no heteroskedasticity though
+
+gna_log2 <- lm(log(grazing_m) ~ ndvi * aspect, data = plot_grazing)  
+shapiro.test(resid(gna_log2))  # not normal
+bptest(gna_log2)  # and heteroskedasticity
+
+# slope
+gs_log <- lm(log(grazing_m) ~ slope_deg, data = plot_grazing)
+shapiro.test(resid(gs_log))  # not normal
+bptest(gs_log)  # and heteroskedasticity
+
+gsa_log <- lm(log(grazing_m) ~ slope_deg + aspect, data = plot_grazing)
+shapiro.test(resid(gsa_log))  # not normal
+bptest(gsa_log)  # and heteroskedasticity
+
+gsa_log2 <- lm(log(grazing_m) ~ slope_deg * aspect, data = plot_grazing)
+shapiro.test(resid(gsa_log2))  # not normal
+bptest(gsa_log2)  # and heteroskedasticity
+
+## sqrt
+# wetness
+gw_sqrt <- lm(sqrt(grazing_m) ~ wetness, data = plot_grazing)
+shapiro.test(resid(gw_sqrt))  # not normal
+bptest(gw_sqrt)  # no heteroskedasticity though
+
+gwa_sqrt <- lm(sqrt(grazing_m) ~ wetness + aspect, data = plot_grazing)
+shapiro.test(resid(gwa_sqrt))  # not normal
+bptest(gwa_sqrt)  # no heteroskedasticity
+
+gwa_sqrt2 <- lm(sqrt(grazing_m) ~ wetness * aspect, data = plot_grazing)
+shapiro.test(resid(gwa_sqrt2))  # not normal
+bptest(gwa_sqrt2)  # no heteroskedasticity
+
+# NDVI
+gn_sqrt <- lm(sqrt(grazing_m) ~ ndvi, data = plot_grazing)
+shapiro.test(resid(gn_sqrt))  # not normal
+bptest(gn_sqrt)  # no heteroskedasticity
+
+gna_sqrt <- lm(sqrt(grazing_m) ~ ndvi + aspect, data = plot_grazing)
+shapiro.test(resid(gna_sqrt))  # not normal 
+bptest(gna_sqrt)  # no heteroskedasticity
+
+gna_sqrt2 <- lm(sqrt(grazing_m) ~ ndvi * aspect, data = plot_grazing)  
+shapiro.test(resid(gna_sqrt2))  # not normal
+bptest(gna_sqrt2)  # and heteroskedasticity
+
+# slope
+gs_sqrt <- lm(sqrt(grazing_m) ~ slope_deg, data = plot_grazing)
+shapiro.test(resid(gs_sqrt))  # not normal
+bptest(gs_sqrt)  # and heteroskedasticity
+
+gsa_sqrt <- lm(sqrt(grazing_m) ~ slope_deg + aspect, data = plot_grazing)
+shapiro.test(resid(gsa_sqrt))  # not normal
+bptest(gsa_sqrt)  # no heteroskedasticity
+
+gsa_sqrt2 <- lm(sqrt(grazing_m) ~ slope_deg * aspect, data = plot_grazing)
+shapiro.test(resid(gsa_sqrt2))  # not normal
+bptest(gsa_sqrt2)  # and heteroskedasticity 
+
+### GLM's 
+# wetness
+gw_glm <- glm(grazing_m ~ wetness, data = plot_grazing)
+hist(resid(gw_glm))  # sort of normal-looking, maybe a bit skewed 
+
+gw_glm2 <- glm(grazing_m ~ wetness, family = Gamma(link = "log"), data = plot_grazing)
+
+summary(gw_glm)
+summary(gw_glm2)  # way less/ not over-dispersed with Gamma (residual deviance < DF)
+
+gwa_glm <- glm(grazing_m ~ wetness + aspect, family = Gamma(link = "log"), data = plot_grazing)
+gwa_glm2 <- glm(grazing_m ~ wetness*aspect, family = Gamma(link = "log"), data = plot_grazing)
+
+# NDVI
+gn_glm <- glm(grazing_m ~ ndvi, family = Gamma(link = "log"), data = plot_grazing)
+gna_glm <- glm(grazing_m ~ ndvi + aspect, family = Gamma(link = "log"), data = plot_grazing)
+gna_glm2 <- glm(grazing_m ~ ndvi*aspect, family = Gamma(link = "log"), data = plot_grazing)
+
+# slope
+gs_glm <- glm(grazing_m ~ slope_deg, family = Gamma(link = "log"), data = plot_grazing)
+gsa_glm <- glm(grazing_m ~ slope_deg + aspect, family = Gamma(link = "log"), data = plot_grazing)
+gsa_glm2 <- glm(grazing_m ~ slope_deg*aspect, family = Gamma(link = "log"), data = plot_grazing)
+
+min(AIC(gw_glm, gw_glm2, gwa_glm, gwa_glm2, gn_glm, gna_glm, gna_glm2, gs_glm, gsa_glm, 
+        gsa_glm2)[,2])  # lowest = 670.6974
+AIC(gw_glm, gw_glm2, gwa_glm, gwa_glm2, gn_glm, gna_glm, gna_glm2, gs_glm, gsa_glm, gsa_glm2)
+  # 'gw_glm2' is lowest 
+
+### Multiple variables
+gwn_glm <- glm(grazing_m ~ wetness_s + ndvi_s, family = Gamma(link = "log"), data = plot_grazing)
+gws_glm <- glm(grazing_m ~ wetness_s + slope_deg_s, family = Gamma(link = "log"), data = plot_grazing)
+gwns_glm <- glm(grazing_m ~ wetness_s + ndvi_s + slope_deg_s, family = Gamma(link = "log"), 
+                data = plot_grazing)
+
+gwna_glm <- glm(grazing_m ~ wetness_s + ndvi_s + aspect, family = Gamma(link = "log"), 
+                data = plot_grazing)
+gwna_glm2 <- glm(grazing_m ~ wetness_s + ndvi_s*aspect, family = Gamma(link = "log"), data = plot_grazing)
+gwna_glm3 <- glm(grazing_m ~ wetness_s*aspect + ndvi_s, family = Gamma(link = "log"), data = plot_grazing)
+gwna_glm4 <- glm(grazing_m ~ wetness_s*aspect + ndvi_s*aspect, family = Gamma(link = "log"), 
+                 data = plot_grazing)
+
+gwsa_glm <- glm(grazing_m ~ wetness_s + slope_deg_s + aspect, family = Gamma(link = "log"), 
+                data = plot_grazing)
+gwsa_glm2 <- glm(grazing_m ~ wetness_s + slope_deg_s*aspect, family = Gamma(link = "log"), 
+                 data = plot_grazing)
+gwsa_glm3 <- glm(grazing_m ~ wetness_s*aspect + slope_deg_s, family = Gamma(link = "log"), 
+                 data = plot_grazing)
+gwsa_glm4 <- glm(grazing_m ~ wetness_s*aspect + slope_deg_s*aspect, family = Gamma(link = "log"), 
+                 data = plot_grazing)
+
+gwnsa_glm <- glm(grazing_m ~ wetness_s + ndvi_s + slope_deg_s + aspect, 
+                 family = Gamma(link = "log"), data = plot_grazing)
+gwnsa_glm2 <- glm(grazing_m ~ wetness_s*aspect + ndvi_s + slope_deg_s, family = Gamma(link = "log"), 
+                  data = plot_grazing)
+gwnsa_glm3 <- glm(grazing_m ~ wetness_s + ndvi_s*aspect + slope_deg_s, family = Gamma(link = "log"), 
+                  data = plot_grazing)
+gwnsa_glm4 <- glm(grazing_m ~ wetness_s + ndvi_s + slope_deg_s*aspect, family = Gamma(link = "log"), 
+                  data = plot_grazing)
+gwnsa_glm5 <- glm(grazing_m ~ wetness_s*aspect + ndvi_s + slope_deg_s*aspect, 
+                  family = Gamma(link = "log"), data = plot_grazing)
+gwnsa_glm6 <- glm(grazing_m ~ wetness_s + ndvi_s*aspect + slope_deg_s*aspect, 
+                  family = Gamma(link = "log"), data = plot_grazing)
+gwnsa_glm7 <- glm(grazing_m ~ wetness_s*aspect + ndvi_s*aspect + slope_deg_s, 
+                  family = Gamma(link = "log"), data = plot_grazing)
+gwnsa_glm8 <- glm(grazing_m ~ wetness_s*aspect + ndvi_s*aspect + slope_deg_s*aspect, 
+                  family = Gamma(link = "log"), data = plot_grazing)
+
+
+min(AIC(gw_glm2, gwn_glm, gws_glm, gwns_glm, gwna_glm, gwna_glm2, gwna_glm3, gwna_glm4,
+        gwsa_glm, gwsa_glm2, gwsa_glm3, gwsa_glm4, gwnsa_glm, gwnsa_glm2, gwnsa_glm3,
+        gwnsa_glm4, gwnsa_glm5, gwnsa_glm6, gwnsa_glm7, gwnsa_glm8)[,2])  
+  # lowest = 670.6974
+AIC(gw_glm2, gwn_glm, gws_glm, gwns_glm, gwna_glm, gwna_glm2, gwna_glm3, gwna_glm4, 
+    gwsa_glm, gwsa_glm2, gwsa_glm3, gwsa_glm4, gwnsa_glm, gwnsa_glm2, gwnsa_glm3, gwnsa_glm4,
+    gwnsa_glm5, gwnsa_glm6, gwnsa_glm7, gwnsa_glm8)
+  # 'gw_glm2' is best (wetness only, family = Gamma)
+
+# null model
+graze_null <- glm(grazing_m ~ 1, family = Gamma(link = "log"), data = plot_grazing)
+AIC(graze_null, gw_glm2)  # better than the null
+
+
+summary(gw_glm2)   ## USE THIS MODEL'S RESULTS ###
+  # intercept = exp(2.553538) ± exp(0.104194)
+  # wetness (NOT STANDARDIZED): exp(-0.020337) ± exp(0.004487), p = 1.62e-05
 
 
 # . ----
 #### Other Basic Statistics ----
 ### Richness ~ Aspect
-ra1 <- lm(richness_siteT ~ aspect, data = richness_site)
-shapiro.test(resid(ra1))  # not normal 
+ra1 <- lm(richness_siteT ~ aspect, data = richness_site2)
+shapiro.test(resid(ra1))  # normal 
 
-wilcox.test(richness_siteT ~ aspect, data = richness_site)
-  # W = 5205, p = < 1.013e-07
+t.test(richness_siteT ~ aspect, data = richness_site2)
+  # t = 2.4577, DF = 31.866, p = 0.01961
+  # N = 17.07, S = 14.73
 
 # average height S vs. N
-richness_site %>% group_by(aspect) %>% summarise(rich = mean(richness_siteT),
-                                                 se = std.error(richness_siteT))
-  # N = 17.1 ± 0.284
-  # S = 14.7 ± 0.310
+richness_site2 %>% group_by(aspect) %>% summarise(rich = mean(richness_siteT),
+                                                  se = std.error(richness_siteT))
+  # N = 17.1 ± 0.651
+  # S = 14.7 ± 0.694
 
 
 ### Richness Proportion ~ Sp Group
+prop_lm <- lm(rich_propT ~ sp_group, data = richness_site)
+shapiro.test(resid(prop_lm))  # not normal, use transformed model 
+
+prop_lm2 <- lm(sqrt(rich_propT) ~ sp_group, data = richness_site)
+shapiro.test(resid(prop_lm2))  # normal 
+
 prop_aov <- aov(sqrt(rich_propT) ~ sp_group, data = richness_site)
 summary(prop_aov)
   # p = <2e-16 ***, F = 41.76, DF = 4 
@@ -1581,88 +1516,6 @@ wilcox.test(coverage_perc ~ aspect, data = h)
 
 # . ----
 #### NMDS Relative Abundance ----
-### NMDS ~ Site ----
-## Dividing coverage across species
-sp_cov <- left_join(plots, coverage)
-sp_cov <- sp_cov %>% 
-            dplyr::select(site_nr, plot_nr, aspect, sp_latin, sp_group, coverage_perc) %>% 
-            group_by(site_nr, plot_nr, sp_group) %>% 
-            mutate(rel_abund = coverage_perc/length(sp_group)) %>% 
-            ungroup() %>% 
-            na.omit() %>% 
-            group_by(site_nr, sp_latin, aspect) %>% 
-            summarize(rel_abund2 = sum(rel_abund)) %>% 
-            mutate(rel_abund2 = ifelse(site_nr == "5", rel_abund2/2, rel_abund2/3)) %>% 
-            ungroup()
-
-print(sp_cov %>% group_by(site_nr) %>% summarise(sum(rel_abund2)), n = 105)  # all = 100%! 
-
-## Making a matrix
-sp_matrix <- sp_cov %>% 
-                distinct() %>% 
-                pivot_wider(names_from = "sp_latin", values_from = "rel_abund2", 
-                            values_fill = NA)  # get a warning, but no duplicates found
-
-sp_matrix[is.na(sp_matrix)] <- 0  # making sure non-existent sp just have coverage of 0
-
-# with only coverage data 
-sp_matrix2 <- sp_matrix %>% 
-                dplyr::select(!c(site_nr, aspect)) 
-
-## Looking at how many axes to extract 
-set.seed(9)
-mds1 <- metaMDS(sp_matrix2, distance = "bray", k = 1, sratmax = 0.99999,    # no convergence
-                autotransform = F)   
-mds2 <- metaMDS(sp_matrix2, distance = "bray", k = 2, sratmax = 0.99999,    # no convergence
-                autotransform = F)   
-mds3 <- metaMDS(sp_matrix2, distance = "bray", k = 3, sratmax = 0.99999,    # solution found
-                autotransform = F) 
-mds4 <- metaMDS(sp_matrix2, distance = "bray", k = 4, sratmax = 0.99999,    # solution found 
-                autotransform = F)
-  # stress = 0.1256
-mds5 <- metaMDS(sp_matrix2, distance = "bray", k = 5, sratmax = 0.99999,    # solution found?
-                autotransform = F)    
-  # stress = 0.0976
-mds6 <- metaMDS(sp_matrix2, distance = "bray", k = 6, sratmax = 0.99999,    # solution found 
-                autotransform = F) 
-  # stress = 0.0798
-mds7 <- metaMDS(sp_matrix2, distance = "bray", k = 7, sratmax = 0.99999,    # solution found 
-                autotransform = F) 
-  # stress = 0.0654
-mds8 <- metaMDS(sp_matrix2, distance = "bray", k = 8, sratmax = 0.99999,    # solution found
-                autotransform = F) 
-  # stress = 0.0566
-mds9 <- metaMDS(sp_matrix2, distance = "bray", k = 9, sratmax = 0.99999,    # solution found? 
-                autotransform = F) 
-mds10 <- metaMDS(sp_matrix2, distance = "bray", k = 10, sratmax = 0.99999,    # no convergence?
-                 autotransform = F)  
-
-scree <- cbind(rbind(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 
-               rbind(mds1$stress, mds2$stress, mds3$stress, mds4$stress, mds5$stress, 
-                     mds6$stress, mds7$stress, mds8$stress, mds9$stress, mds10$stress))
-plot(scree)
-  # ~5 or more dimensions = <0.1 stress (which is good)
-
-stressplot(mds5)   # non-metric fit = 0.996, linear fit = 0.957
-stressplot(mds6)   # non-metric fit = 0.997, linear fit = 0.972
-stressplot(mds7)   # non-metric fit = 0.998, linear fit = 0.98
-stressplot(mds8)   # non-metric fit = 0.999, linear fit = 0.986
-stressplot(mds9)   # non-metric fit = 0.999, linear fit = 0.99
-
-  # 6 dimensions improves the linear fit quite a bit, then afterwards it tapers off 
-
-# choosing k = 6
-
-set.seed(6)
-nmds6 <- metaMDS(sp_matrix2, distance = "bray", k = 6, autotransform = F, trymax = 500, 
-                 sratmax = 0.99999)  
-  # note that autotransformation is off (default = T) 
-
-nmds6
-  # stress = 0.05118
-  # 6 dimensions 
-
-
 ### NMDS ~ Plot ----
 ## Dividing coverage across species
 sp_cov2 <- left_join(plots, coverage)
@@ -1813,64 +1666,6 @@ gisfit4
   # wetness: R2 = 0.1994, p = 0.001 (SIGNIFICANT) 
   # soil depth: R2 = 0.0073, p = 0.688  
 
-
-### NMDS with GIS matrix ----
-## Not standardized 
-# making ndvi not negative
-gisvar2b <- gisvar2 %>% 
-              mutate(ndvi = ifelse(ndvi < 0, ndvi + 0.025, ndvi)) %>% 
-              dplyr::select(!(plot_nr))
-
-# NMDS 
-set.seed(9)
-mds1gis <- metaMDS(gisvar2b, distance = "bray", k = 1, sratmax = 0.99999,    # no convergence
-                   autotransform = F)   
-mds2gis <- metaMDS(gisvar2b, distance = "bray", k = 2, sratmax = 0.99999,    # solution found 
-                   autotransform = F)   
-  # stress = 0.085912
-mds3gis <- metaMDS(gisvar2b, distance = "bray", k = 3, sratmax = 0.99999,    # solution found 
-                   autotransform = F) 
-  # stress = 0.061489
-mds4gis <- metaMDS(gisvar2b, distance = "bray", k = 4, sratmax = 0.99999,    # solution found 
-                   autotransform = F)
-  # stress = 0.04273
-mds5gis <- metaMDS(gisvar2b, distance = "bray", k = 5, sratmax = 0.99999,    # solution found 
-                   autotransform = F)   
-  # stress = 0.0337
-mds6gis <- metaMDS(gisvar2b, distance = "bray", k = 6, sratmax = 0.99999,    # no convergence
-                   autotransform = F) 
-mds7gis <- metaMDS(gisvar2b, distance = "bray", k = 7, sratmax = 0.99999,    # no convergence 
-                   autotransform = F) 
-mds8gis <- metaMDS(gisvar2b, distance = "bray", k = 8, sratmax = 0.99999,    # no convergence
-                   autotransform = F) 
-mds9gis <- metaMDS(gisvar2b, distance = "bray", k = 9, sratmax = 0.99999,    # no convergence
-                   autotransform = F) 
-mds10gis <- metaMDS(gisvar2b, distance = "bray", k = 10, sratmax = 0.99999,    # no convergence
-                    autotransform = F) 
-
-scree2 <- cbind(rbind(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 
-                rbind(mds1gis$stress, mds2gis$stress, mds3gis$stress, mds4gis$stress, mds5gis$stress, 
-                      mds6gis$stress, mds7gis$stress, mds8gis$stress, mds9gis$stress, mds10gis$stress))
-plot(scree2)
-# ~2 or more dimensions = <0.1 stress (which is good)
-
-stressplot(mds2gis)   # non-metric fit = 0.993, linear fit = 0.972
-stressplot(mds3gis)   # non-metric fit = 0.996, linear fit = 0.984
-stressplot(mds4gis)   # non-metric fit = 0.998, linear fit = 0.991
-stressplot(mds5gis)   # non-metric fit = 0.999, linear fit = 0.994
-# k = 4 is best 
-
-set.seed(4)
-nmds4 <- metaMDS(gisvar2b, distance = "bray", k = 4, autotransform = F, trymax = 500, 
-                 sratmax = 0.99999)  
-  # note that autotransformation is off (default = T) 
-
-nmds4
-  # stress = 0.041999
-  # 4 dimensions 
-
-
-## Standardized variables
 
 #### Visualizing NMDS's ----
 ### Site
@@ -2149,6 +1944,324 @@ summary(rpg2_sqrt)      ## USE THIS MODEL'S RESULTS ##
 
 # checking residuals 
 plot(residuals(rpg2_sqrt) ~ predict(rpg2_sqrt, type = "response")) 
+### Height ~ Grazing ----
+hist(richness_site2$height_site)  # right skewed (positive skew)
+head(richness_site2$height_site)
+
+
+# testing to use another distribution
+richness_site2 <- richness_site2 %>% 
+  mutate(height_int = round(height_site*1000))
+
+hganw_poi <- glm(height_int ~ grazing_m + aspect + ndvi + wetness, family = "poisson", 
+                 data = richness_site2)
+hganw_nb <- glm.nb(height_int ~ grazing_m + aspect + ndvi + wetness, 
+                   data = richness_site2)
+
+plot(hganw_poi)
+plot(hganw_nb)
+summary(hganw_poi)  # residual deviance >> DF = likely overdispersed 
+summary(hganw_nb)  # residual deviance and DF = very similar = not overdispersed = better
+# intercept: exp(7.773465)   (DIVIDE BY 1000 TO BACKTRANSFORM!!)
+# 
+
+summary()
+
+
+
+hg1 <- lm(height_site ~ grazing_m, data = richness_site2)
+plot(hg1)
+shapiro.test(resid(hg1))   # p < 0.05 = not normal (skewed)
+bptest(hg1)  # p > 0.05 = no heteroskedasticity though 
+
+## Transformations 
+# log
+hg2 <- lm(log(height_site) ~ grazing_m, data = richness_site2)
+plot(hg2)
+shapiro.test(resid(hg2))   # p < 0.05 = not normal
+bptest(hg2)  # p > 0.05 = no heteroskedasticity 
+
+# sqrt 
+hg3 <- lm(sqrt(height_site) ~ grazing_m, data = richness_site2)
+plot(hg3)
+shapiro.test(resid(hg3))   # p < 0.05 = not normal, almost worse 
+bptest(hg3)  # p > 0.05 = no heteroskedasticity 
+
+# box-cox 
+bc <- boxcox(hg1)
+(lambda <- bc$x[which.max(bc$y)])  # extracting exact lambda for transformation 
+
+hg4 <- lm(((height_site^lambda-1)/lambda) ~ grazing_m, data = richness_site2)
+plot(hg4)
+shapiro.test(resid(hg4))   # p < 0.05 = not normal, nothing works 
+bptest(hg4)  # p > 0.05 = no heteroskedasticity 
+
+
+## GLM    
+hg_glm <- glm(height_site ~ grazing_m, family = Gamma(link = log), data = richness_site2)
+hist(resid(hg_glm))  # without 'Gamma' distribution it wasn't super normal 
+
+
+### Models with aspect 
+hga1 <- lm(height_site ~ grazing_m + aspect, data = richness_site2)
+plot(hga1)
+shapiro.test(resid(hga1))   # p < 0.05 = not normal 
+bptest(hga1)  # p < 0.05 = and heteroskedasticity 
+
+hga_glm <- glm(height_site ~ grazing_m + aspect, family = Gamma(link = log), data = richness_site2)
+hist(resid(hga_glm))
+
+hga_glm2 <- glm(height_site ~ grazing_m*aspect, family = Gamma(link = log), data = richness_site2)
+hist(resid(hga_glm2))
+
+AIC(hg_glm, hga_glm, hga_glm2)  # 'hga_glm2' is best
+
+
+### Models with GIS variables (+ aspect)
+## NDVI
+hgan <- glm(height_site ~ grazing_m + aspect + ndvi, family = Gamma(link = log), data = richness_site2)
+hgan2 <- glm(height_site ~ grazing_m + aspect*ndvi, family = Gamma(link = log), data = richness_site2)
+hgan3 <- glm(height_site ~ grazing_m*aspect + ndvi, family = Gamma(link = log), data = richness_site2)
+hgan4 <- glm(height_site ~ grazing_m*aspect + ndvi*aspect, family = Gamma(link = log), 
+             data = richness_site2)
+hgan5 <- glm(height_site ~ grazing_m*aspect*ndvi, family = Gamma(link = log), data = richness_site2)
+
+AIC(hga_glm2, hgan, hgan2, hgan3, hgan4, hgan5)  # 'hgan3' is best 
+
+## Slope
+hgas <- glm(height_site ~ grazing_m + aspect + slope_deg, family = Gamma(link = log), 
+            data = richness_site2)
+hgas2 <- glm(height_site ~ grazing_m + aspect*slope_deg, family = Gamma(link = log), 
+             data = richness_site2)
+hgas3 <- glm(height_site ~ grazing_m*aspect + slope_deg, family = Gamma(link = log), 
+             data = richness_site2)
+hgas4 <- glm(height_site ~ grazing_m*aspect + slope_deg*aspect, family = Gamma(link = log), 
+             data = richness_site2)
+hgas5 <- glm(height_site ~ grazing_m*aspect*slope_deg, family = Gamma(link = log), 
+             data = richness_site2)
+
+AIC(hga_glm2, hgan3, hgas, hgas2, hgas3, hgas4, hgas5)  # 'hgan3' is still best 
+
+## Wetness
+hgaw <- glm(height_site ~ grazing_m + aspect + wetness, family = Gamma(link = log), 
+            data = richness_site2)
+hgaw2 <- glm(height_site ~ grazing_m + aspect*wetness, family = Gamma(link = log), 
+             data = richness_site2)
+hgaw3 <- glm(height_site ~ grazing_m*aspect + wetness, family = Gamma(link = log), 
+             data = richness_site2)
+hgaw4 <- glm(height_site ~ grazing_m*aspect + wetness*aspect, family = Gamma(link = log), 
+             data = richness_site2)
+hgaw5 <- glm(height_site ~ grazing_m*aspect*wetness, family = Gamma(link = log), 
+             data = richness_site2)
+
+AIC(hga_glm2, hgan3, hgaw, hgaw2, hgaw3, hgaw4, hgaw5)  # 'hgan3' is still best 
+
+
+## NDVI + 1 other
+hgans <- glm(height_site ~ grazing_m + aspect + ndvi + slope_deg, family = Gamma(link = log), 
+             data = richness_site2)
+hganw <- glm(height_site ~ grazing_m + aspect + ndvi + wetness, family = Gamma(link = log), 
+             data = richness_site2)
+
+AIC(hgan3, hgans, hganw)  # 'hganw' = best 
+
+
+## Choosing the best model 
+h_null <- glm(height_site ~ 1, family = Gamma(link = log), data = richness_site2)
+
+AIC(hgan3, hganw, h_null)   # 'hganw' is best
+
+
+## Height Model Results ## ----
+# height_site ~ grazing_m * aspect + ndvi + wetness, family = Gamma(link = log)
+
+summary(hganw)        ## USE THIS MODEL'S RESULTS ##
+# grazing NORTH: 2.7^(-0.007511) ± 2.7^(0.004852), p = 0.124 (not significant)
+# grazing*aspect SOUTH: 2.7^(0.016494) ± 2.7^(0.007022), p = 0.0200 (SIGNIFICANT)
+# ndvi: 2.7^(5.541403) ± 2.7^(0.549923), p = < 2e-16 (SIGNIFICANT)
+# wetness: 2.7^(-0.009523) ± 2.7^(0.001767), p = 2.46e-07 (SIGNIFICANT)
+
+# calculating McFadden's R2 
+with(summary(hganw2), 1 - deviance/null.deviance)  # R2 = 0.5331 (a good model)
+
+# checking residuals 
+plot(residuals(hganwsd14) ~ predict(hganwsd14, type = "response")) 
+
+
+# testing if any "outliers" effect the relationships
+test <- richness_site %>% filter(wetness < 50)
+ggplot(test, aes(x = wetness, y = height_site)) +  # height + aspect
+  geom_point(aes(color = aspect)) +
+  stat_smooth(method = "lm", aes(color = aspect))
+
+hganwsd14t <- glm(height_site ~ grazing_m*aspect + ndvi*aspect + wetness*aspect + slope_deg*aspect + 
+                    soil_depth*aspect, family = Gamma(link = log), data = test)
+summary(hganwsd14t)  # now grazing S is significant, NDVI differs between N and S, etc. 
+
+
+### Coverage ~ Grazing ----
+ggplot(coverage_site, aes(x = coverage_perc)) +
+  geom_histogram() +
+  facet_wrap(~sp_group)   # zero-inflated/ lots of low values 
+
+cg1 <- lm(coverage_perc ~ grazing_m + sp_group, data = coverage_site)
+plot(cg1)
+hist(resid(cg1))
+shapiro.test(resid(cg1))   # p < 0.05 = not normal 
+bptest(cg1)  # p < 0.05 = and heteroskedasticity   
+
+cg2 <- lm(coverage_perc ~ grazing_m*sp_group, data = coverage_site)   # int. makes more sense 
+plot(cg2)
+shapiro.test(resid(cg2))   # p < 0.05 = not normal 
+bptest(cg2)  # p < 0.05 = and heteroskedasticity   
+
+## Transformations 
+# log
+cg3 <- lm(log(coverage_perc) ~ grazing_m*sp_group, data = coverage_site)
+plot(cg3)
+shapiro.test(resid(cg3))   # p < 0.05 = not normal
+bptest(cg3)  # p < 0.05 = and heteroskedasticity 
+
+# sqrt 
+cg4 <- lm(sqrt(coverage_perc) ~ grazing_m*sp_group, data = coverage_site)
+plot(cg4)
+shapiro.test(resid(cg4))   # p > 0.05 = normal
+bptest(cg4)  # p < 0.05 = but heteroskedasticity 
+
+# box-cox 
+bc2 <- boxcox(cg1)
+(lambda2 <- bc2$x[which.max(bc2$y)])  # extracting exact lambda for transformation 
+
+cg5 <- lm(((coverage_perc^lambda2-1)/lambda2) ~ grazing_m*sp_group, data = coverage_site)
+plot(cg5)
+shapiro.test(resid(cg5))   # p > 0.05 = normal
+bptest(cg5)  # p < 0.05 = no heteroskedasticity 
+summary(cg5)
+
+
+## GLM
+cg_glm <- glm(coverage_perc ~ grazing_m*sp_group, data = coverage_site)
+hist(resid(cg_glm))  # looks pretty 'normal' (can use Gaussian)
+summary(cg_glm)     
+
+
+### Models with aspect
+cga1 <- lm(coverage_perc ~ grazing_m*sp_group*aspect, data = coverage_site)
+plot(cga1)
+shapiro.test(resid(cga1))   # p < 0.05 = not normal, can't use it 
+bptest(cga1)  # p < 0.05 = and heteroskedasticity 
+
+cga_glm <- glm(coverage_perc ~ grazing_m + sp_group + aspect, data = coverage_site)
+hist(resid(cga_glm))   # gaussian works 
+
+cga_glm2 <- glm(coverage_perc ~ grazing_m*sp_group + aspect, data = coverage_site)
+cga_glm3 <- glm(coverage_perc ~ grazing_m*aspect + sp_group, data = coverage_site)
+cga_glm4 <- glm(coverage_perc ~ grazing_m + sp_group*aspect, data = coverage_site)
+cga_glm5 <- glm(coverage_perc ~ grazing_m*sp_group*aspect, data = coverage_site)
+
+AIC(cg_glm, cga_glm, cga_glm2, cga_glm3, cga_glm4, cga_glm5)   # best is 'cga_glm' (no interaction)
+
+
+### Models with GIS variables (+ aspect)
+# avoiding interactions with sp_group due to the small amount of data 
+## NDVI
+cgan <- glm(coverage_perc ~ grazing_m + sp_group + aspect + ndvi, data = coverage_site)
+can <- glm(coverage_perc ~ grazing_m + sp_group + ndvi, data = coverage_site)
+cgn <- glm(coverage_perc ~ grazing_m + aspect + ndvi, data = coverage_site)
+cgn2 <- glm(coverage_perc ~ grazing_m + aspect*ndvi, data = coverage_site)
+cgn3 <- glm(coverage_perc ~ grazing_m*aspect + ndvi, data = coverage_site)
+cgn4 <- glm(coverage_perc ~ grazing_m*aspect + ndvi*aspect, data = coverage_site)
+cgan2 <- glm(coverage_perc ~ grazing_m + sp_group + ndvi*aspect, data = coverage_site)
+cgan3 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + ndvi*aspect, data = coverage_site)
+cgan4 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + ndvi, data = coverage_site)
+
+min(AIC(cga_glm, cgan, cgan2, cgan3, cgan4, can, cgn, cgn2, cgn3, cgn4)[,2])   # lowest == 1361.371 
+AIC(cga_glm, cgan, cgan2, cgan3, cgan4, can, cgn, cgn2, cgn3, cgn4)  # 'cga_glm' or 'can' is best 
+
+## Slope
+cgas <- glm(coverage_perc ~ grazing_m + sp_group + aspect + slope_deg, data = coverage_site)
+cas <- glm(coverage_perc ~ grazing_m + sp_group + slope_deg, data = coverage_site)
+cgs <- glm(coverage_perc ~ grazing_m + aspect + slope_deg, data = coverage_site)
+cgs2 <- glm(coverage_perc ~ grazing_m + aspect*slope_deg, data = coverage_site)
+cgs3 <- glm(coverage_perc ~ grazing_m*aspect + slope_deg, data = coverage_site)
+cgs4 <- glm(coverage_perc ~ grazing_m*aspect + slope_deg*aspect, data = coverage_site)
+cgan2 <- glm(coverage_perc ~ grazing_m + sp_group + slope_deg*aspect, data = coverage_site)
+cgas3 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + slope_deg*aspect, data = coverage_site)
+cgas4 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + slope_deg, data = coverage_site)
+
+min(AIC(cga_glm, cgas, cgas2, cgas3, cgas4, cas, cgs, cgs2, cgs3, cgs4)[,2])   # lowest == 1361.371 
+AIC(cga_glm, cgas, cgas2, cgas3, cgas4, cas, cgs, cgs2, cgs3, cgs4)  # 'cga_glm' or 'cas' is best 
+
+## Soil depth
+cgad <- glm(coverage_perc ~ grazing_m + sp_group + aspect + soil_depth, data = coverage_site)
+cad <- glm(coverage_perc ~ grazing_m + sp_group + soil_depth, data = coverage_site)
+cgd <- glm(coverage_perc ~ grazing_m + aspect + soil_depth, data = coverage_site)
+cgd2 <- glm(coverage_perc ~ grazing_m + aspect*soil_depth, data = coverage_site)
+cgd3 <- glm(coverage_perc ~ grazing_m*aspect + soil_depth, data = coverage_site)
+cgd4 <- glm(coverage_perc ~ grazing_m*aspect + soil_depth*aspect, data = coverage_site)
+cgaw2 <- glm(coverage_perc ~ grazing_m + sp_group + soil_depth*aspect, data = coverage_site)
+cgad3 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + soil_depth*aspect, data = coverage_site)
+cgad4 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + soil_depth, data = coverage_site)
+
+min(AIC(cga_glm, cgad, cgad2, cgad3, cgad4, cad, cgd, cgd2, cgd3, cgd4)[,2])   # lowest == 1361.371 
+AIC(cga_glm, cgad, cgad2, cgad3, cgad4, cad, cgd, cgd2, cgd3, cgd4)  # 'cga_glm' or 'cad' is best
+
+## Wetness
+cgaw <- glm(coverage_perc ~ grazing_m + sp_group + aspect + wetness, data = coverage_site)
+caw <- glm(coverage_perc ~ grazing_m + sp_group + wetness, data = coverage_site)
+cgw <- glm(coverage_perc ~ grazing_m + aspect + wetness, data = coverage_site)
+cgw2 <- glm(coverage_perc ~ grazing_m + aspect*wetness, data = coverage_site)
+cgw3 <- glm(coverage_perc ~ grazing_m*aspect + wetness, data = coverage_site)
+cgw4 <- glm(coverage_perc ~ grazing_m*aspect + wetness*aspect, data = coverage_site)
+cgaw2 <- glm(coverage_perc ~ grazing_m + sp_group + wetness*aspect, data = coverage_site)
+cgaw3 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + wetness*aspect, data = coverage_site)
+cgaw4 <- glm(coverage_perc ~ grazing_m*aspect + sp_group + wetness, data = coverage_site)
+
+min(AIC(cga_glm, cgaw, cgaw2, cgaw3, cgaw4, caw, cgw, cgw2, cgw3, cgw4)[,2])   # lowest == 1361.303 
+AIC(cga_glm, cgaw, cgaw2, cgaw3, cgaw4, caw, cgw, cgw2, cgw3, cgw4)  # 'cga_glm' or 'caw' is best 
+
+# comparing to each variable
+AIC(cga_glm, can, cas, cad, caw)  # all pretty much identical, none of GIS ones have 'aspect'
+
+
+## Combination testing 
+canw <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + wetness, data = coverage_site)
+cans <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + slope_deg, data = coverage_site)
+cand <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + soil_depth, data = coverage_site)
+
+canws <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + wetness + slope_deg, data = coverage_site)
+canwd <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + wetness + soil_depth, data = coverage_site)
+
+canwsd <- glm(coverage_perc ~ grazing_m + sp_group + ndvi + wetness + slope_deg + 
+                soil_depth, data = coverage_site)
+
+AIC(cga_glm, canw, cans, cand, canws, canwd, canwsd)  # 'cga_glm' is best, GIS var don't add  
+
+
+## Choosing the best model
+c_null <- glm(coverage_perc ~ 1, data = coverage_site)
+AIC(cga_glm, c_null)
+
+## Coverage Model Results ## ----
+# glm(coverage_perc ~ grazing_m + sp_group + aspect)
+
+summary(cga_glm)   ## USE THIS MODEL'S RESULTS ##
+# 6.75333 ± 2.9027
+# grazing: -0.01039 ± 0.1297, p = 0.9363    
+# herb: -5.14391 ± 3.42615, p = 0.1352    
+# lichen: 16.96416 ± 3.37309, p = 1.31e-06 (SIGNIFICANT)
+# moss: 4.7241 ± 3.39892, p = 0.1665    
+# shrub: 50.31285 ± 3.37309, p = < 2e-16 (SIGNIFICANT)
+# aspect SOUTH: 0.16916 ± 2.15598, p = 0.9376    
+
+# calculating McFadden's R2 
+with(summary(cga_glm), 1 - deviance/null.deviance)  # R2 = 0.6819 (very good model)
+
+# checking residuals 
+plot(residuals(cga_glm) ~ predict(cga_glm, type = "response"))  # a pattern, but due to sp. groups
+
+
+
 #### NMDS (Coverage by Group) ----
 ### Making a matrix
 cov_matrix <- coverage_site %>% 
@@ -2303,3 +2416,144 @@ ano_g <- anosim(cov_matrix_sp, cov_matrix$grazing_cat, distance = "bray", permut
 ano_g
 # not significantly different (R = -0.08811, p = 0.9864) 
 
+
+### NMDS ~ Site ----
+## Dividing coverage across species
+sp_cov <- left_join(plots, coverage)
+sp_cov <- sp_cov %>% 
+  dplyr::select(site_nr, plot_nr, aspect, sp_latin, sp_group, coverage_perc) %>% 
+  group_by(site_nr, plot_nr, sp_group) %>% 
+  mutate(rel_abund = coverage_perc/length(sp_group)) %>% 
+  ungroup() %>% 
+  na.omit() %>% 
+  group_by(site_nr, sp_latin, aspect) %>% 
+  summarize(rel_abund2 = sum(rel_abund)) %>% 
+  mutate(rel_abund2 = ifelse(site_nr == "5", rel_abund2/2, rel_abund2/3)) %>% 
+  ungroup()
+
+print(sp_cov %>% group_by(site_nr) %>% summarise(sum(rel_abund2)), n = 105)  # all = 100%! 
+
+## Making a matrix
+sp_matrix <- sp_cov %>% 
+  distinct() %>% 
+  pivot_wider(names_from = "sp_latin", values_from = "rel_abund2", 
+              values_fill = NA)  # get a warning, but no duplicates found
+
+sp_matrix[is.na(sp_matrix)] <- 0  # making sure non-existent sp just have coverage of 0
+
+# with only coverage data 
+sp_matrix2 <- sp_matrix %>% 
+  dplyr::select(!c(site_nr, aspect)) 
+
+## Looking at how many axes to extract 
+set.seed(9)
+mds1 <- metaMDS(sp_matrix2, distance = "bray", k = 1, sratmax = 0.99999,    # no convergence
+                autotransform = F)   
+mds2 <- metaMDS(sp_matrix2, distance = "bray", k = 2, sratmax = 0.99999,    # no convergence
+                autotransform = F)   
+mds3 <- metaMDS(sp_matrix2, distance = "bray", k = 3, sratmax = 0.99999,    # solution found
+                autotransform = F) 
+mds4 <- metaMDS(sp_matrix2, distance = "bray", k = 4, sratmax = 0.99999,    # solution found 
+                autotransform = F)
+# stress = 0.1256
+mds5 <- metaMDS(sp_matrix2, distance = "bray", k = 5, sratmax = 0.99999,    # solution found?
+                autotransform = F)    
+# stress = 0.0976
+mds6 <- metaMDS(sp_matrix2, distance = "bray", k = 6, sratmax = 0.99999,    # solution found 
+                autotransform = F) 
+# stress = 0.0798
+mds7 <- metaMDS(sp_matrix2, distance = "bray", k = 7, sratmax = 0.99999,    # solution found 
+                autotransform = F) 
+# stress = 0.0654
+mds8 <- metaMDS(sp_matrix2, distance = "bray", k = 8, sratmax = 0.99999,    # solution found
+                autotransform = F) 
+# stress = 0.0566
+mds9 <- metaMDS(sp_matrix2, distance = "bray", k = 9, sratmax = 0.99999,    # solution found? 
+                autotransform = F) 
+mds10 <- metaMDS(sp_matrix2, distance = "bray", k = 10, sratmax = 0.99999,    # no convergence?
+                 autotransform = F)  
+
+scree <- cbind(rbind(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 
+               rbind(mds1$stress, mds2$stress, mds3$stress, mds4$stress, mds5$stress, 
+                     mds6$stress, mds7$stress, mds8$stress, mds9$stress, mds10$stress))
+plot(scree)
+# ~5 or more dimensions = <0.1 stress (which is good)
+
+stressplot(mds5)   # non-metric fit = 0.996, linear fit = 0.957
+stressplot(mds6)   # non-metric fit = 0.997, linear fit = 0.972
+stressplot(mds7)   # non-metric fit = 0.998, linear fit = 0.98
+stressplot(mds8)   # non-metric fit = 0.999, linear fit = 0.986
+stressplot(mds9)   # non-metric fit = 0.999, linear fit = 0.99
+
+# 6 dimensions improves the linear fit quite a bit, then afterwards it tapers off 
+
+# choosing k = 6
+
+set.seed(6)
+nmds6 <- metaMDS(sp_matrix2, distance = "bray", k = 6, autotransform = F, trymax = 500, 
+                 sratmax = 0.99999)  
+# note that autotransformation is off (default = T) 
+
+nmds6
+# stress = 0.05118
+# 6 dimensions 
+
+
+
+### NMDS with GIS matrix ----
+## Not standardized 
+# making ndvi not negative
+gisvar2b <- gisvar2 %>% 
+  mutate(ndvi = ifelse(ndvi < 0, ndvi + 0.025, ndvi)) %>% 
+  dplyr::select(!(plot_nr))
+
+# NMDS 
+set.seed(9)
+mds1gis <- metaMDS(gisvar2b, distance = "bray", k = 1, sratmax = 0.99999,    # no convergence
+                   autotransform = F)   
+mds2gis <- metaMDS(gisvar2b, distance = "bray", k = 2, sratmax = 0.99999,    # solution found 
+                   autotransform = F)   
+# stress = 0.085912
+mds3gis <- metaMDS(gisvar2b, distance = "bray", k = 3, sratmax = 0.99999,    # solution found 
+                   autotransform = F) 
+# stress = 0.061489
+mds4gis <- metaMDS(gisvar2b, distance = "bray", k = 4, sratmax = 0.99999,    # solution found 
+                   autotransform = F)
+# stress = 0.04273
+mds5gis <- metaMDS(gisvar2b, distance = "bray", k = 5, sratmax = 0.99999,    # solution found 
+                   autotransform = F)   
+# stress = 0.0337
+mds6gis <- metaMDS(gisvar2b, distance = "bray", k = 6, sratmax = 0.99999,    # no convergence
+                   autotransform = F) 
+mds7gis <- metaMDS(gisvar2b, distance = "bray", k = 7, sratmax = 0.99999,    # no convergence 
+                   autotransform = F) 
+mds8gis <- metaMDS(gisvar2b, distance = "bray", k = 8, sratmax = 0.99999,    # no convergence
+                   autotransform = F) 
+mds9gis <- metaMDS(gisvar2b, distance = "bray", k = 9, sratmax = 0.99999,    # no convergence
+                   autotransform = F) 
+mds10gis <- metaMDS(gisvar2b, distance = "bray", k = 10, sratmax = 0.99999,    # no convergence
+                    autotransform = F) 
+
+scree2 <- cbind(rbind(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 
+                rbind(mds1gis$stress, mds2gis$stress, mds3gis$stress, mds4gis$stress, mds5gis$stress, 
+                      mds6gis$stress, mds7gis$stress, mds8gis$stress, mds9gis$stress, mds10gis$stress))
+plot(scree2)
+# ~2 or more dimensions = <0.1 stress (which is good)
+
+stressplot(mds2gis)   # non-metric fit = 0.993, linear fit = 0.972
+stressplot(mds3gis)   # non-metric fit = 0.996, linear fit = 0.984
+stressplot(mds4gis)   # non-metric fit = 0.998, linear fit = 0.991
+stressplot(mds5gis)   # non-metric fit = 0.999, linear fit = 0.994
+# k = 4 is best 
+
+set.seed(4)
+nmds4 <- metaMDS(gisvar2b, distance = "bray", k = 4, autotransform = F, trymax = 500, 
+                 sratmax = 0.99999)  
+# note that autotransformation is off (default = T) 
+
+nmds4
+# stress = 0.041999
+# 4 dimensions 
+
+
+## Standardized variables
