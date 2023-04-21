@@ -25,7 +25,7 @@ slope <- read.csv("Data/slope.csv")
 soildepth <- read.csv("Data/soildepth.csv")
 wetness <- read.csv("Data/wetness.csv")
 
-
+?TukeyHSD()
 #### Data Exploration & Cleaning ----
 view(sites)
 view(plots)
@@ -54,7 +54,8 @@ sites <- sites %>%
                    site_nr = as.character(site_nr)) %>% 
             mutate(aspect = case_when(grepl("S", site) ~ "S",
                                       grepl("N", site) ~ "N"),
-                   grazing_cat = substr(site, 1, 1))   # adding aspect
+                   grazing_cat = substr(site, 1, 1)) %>%   # adding aspect
+            mutate(grazing_m = grazing_s/60)    # grazing in minutes 
 str(sites)            
 
 plots <- plots %>% 
@@ -162,21 +163,8 @@ richness <- plots %>%
               mutate(richness_siteT = mean(richness_plot)) %>%  # true richness per site (with reps)
               ungroup() %>% 
               group_by(sp_group, site_nr) %>% 
-              mutate(rich_propT = mean(rich_group_prop))
-
-# creating a new categorical grazing variable with 3 categories 
-summary(sites)
-  # min grazing = 16.42s
-  # max grazing = 1774.98s
-
-sites <- sites %>% 
-            mutate(grazing_cat2 = case_when(grazing_s < 300 ~ "1",     # low
-                                            grazing_s >= 300 & grazing_s < 800 ~ "2",
-                                            grazing_s >= 800 ~ "3"))   # high
-
-sites %>% group_by(grazing_cat2) %>%  summarize(length(grazing_cat2))
-  # made it as even as possible without making it too 'incorrect' for what is L, M, and H
-
+              mutate(rich_propT = mean(rich_group_prop)) %>% 
+              mutate(rich_prop_perc = rich_propT*100)   
 
 ### GIS Standardization
 gisvar <- gisvar %>% 
@@ -190,8 +178,10 @@ gisvar <- gisvar %>%
 
 ### Combining dataframes ----
 ## Combining 'richness' with 'sites' to add grazing data 
-grazing <- sites %>% dplyr::select(site_nr, plot_nr, plot, aspect, grazing_s)
-grazing <- grazing %>% mutate(grazing_m = grazing_s/60)
+grazing <- sites %>% dplyr::select(site_nr, plot_nr, plot, aspect, grazing_m)
+grazing <- grazing %>% 
+              mutate(grazing_m_s = as.vector(scale(grazing_m)))  # standardizing grazing
+              
 str(grazing)
 
 richness <- left_join(richness, grazing)
@@ -217,9 +207,8 @@ plot_grazing <- left_join(sites, gisvar)
 str(plot_grazing)
 
 plot_grazing <- plot_grazing %>% 
-                    dplyr::select(site_nr, plot_nr, grazing_s, aspect, ndvi, slope_deg, wetness,
-                                  soil_depth, ndvi_s, wetness_s, slope_deg_s, soil_depth_s) %>% 
-                    mutate(grazing_m = grazing_s/60)
+                    dplyr::select(site_nr, plot_nr, grazing_m, aspect, ndvi, slope_deg, wetness,
+                                  soil_depth, ndvi_s, wetness_s, slope_deg_s, soil_depth_s)
 
 
 ### Creating summary dataframes ----
@@ -237,7 +226,6 @@ coverage_site <- coverage %>%
                               slope_deg = mean(slope_deg),
                               wetness = mean(wetness),
                               soil_depth = mean(soil_depth),
-                              grazing_s = mean(grazing_s),
                               grazing_m = mean(grazing_m))
 coverage_site <- as.data.frame(coverage_site)
 str(coverage_site)
@@ -252,12 +240,15 @@ richness_site <- richness %>%
                            ndvi_s = mean(ndvi_s),
                            slope_deg_s = mean(slope_deg_s),
                            wetness_s = mean(wetness_s),
-                           soil_depth_s = mean(soil_depth_s)) %>% 
+                           soil_depth_s = mean(soil_depth_s),
+                           grazing_m = mean(grazing_m),
+                           grazing_m_s = mean(grazing_m_s)) %>% 
                     group_by(site_nr, sp_group, aspect) %>% 
                     summarise(richness_siteT = mean(richness_siteT),
                               height_site = mean(height_site),
                               richness_group = mean(richness_group),
                               rich_propT = mean(rich_propT),
+                              rich_prop_perc = mean(rich_prop_perc),
                               ndvi = mean(ndvi),
                               slope_deg = mean(slope_deg),
                               wetness = mean(wetness),
@@ -266,8 +257,8 @@ richness_site <- richness %>%
                               slope_deg_s = mean(slope_deg_s),
                               wetness_s = mean(wetness_s),
                               soil_depth_s = mean(soil_depth_s),
-                              grazing_s = mean(grazing_s),
-                              grazing_m = mean(grazing_m))
+                              grazing_m = mean(grazing_m),
+                              grazing_m_s = mean(grazing_m_s))
   
 # without sp group
 richness_site2 <- richness_site %>% 
@@ -283,7 +274,8 @@ richness_site2 <- richness_site %>%
                               slope_deg_s = mean(slope_deg_s),
                               wetness_s = mean(wetness_s),
                               soil_depth_s = mean(soil_depth_s),
-                              grazing_m = mean(grazing_m))
+                              grazing_m = mean(grazing_m),
+                              grazing_m_s = mean(grazing_m_s))
 
 
 
@@ -311,15 +303,20 @@ ggplot(richness_site, aes(x = grazing_m, y = rich_propT)) +   # how proportions 
 
 # use this one for final? or without aspect
 ggplot(richness_site, aes(x = grazing_m, y = rich_propT)) +   # aspect accounted for 
-  geom_point(aes(color = sp_group)) +
-  stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group)) +   
-  facet_wrap(~aspect)
+  geom_point(aes(color = aspect)) +
+  stat_smooth(method = "lm", aes(color = aspect, fill = aspect)) +   
+  facet_wrap(~sp_group, scales = "free_y")
 
 ggplot(richness, aes(x = aspect, y = rich_propT)) +   # relative species nr for each group 
   geom_boxplot(aes(fill = sp_group))                       # for N vs. S 
 
 ggplot(richness_site, aes(x = aspect, y = richness_siteT)) +   # averaged richness N vs. S
   geom_boxplot()
+
+ggplot(richness_site, aes(grazing_m, y = richness_group)) +  # nr of species for each group
+  geom_point(aes(color = sp_group)) +                         # for N vs. S
+  stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = F) +   
+  facet_wrap(~aspect)
 
 ## Coverage
 ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +  # coverage of groups with grazing 
@@ -328,10 +325,10 @@ ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +  # coverage of gr
 
 # use this one for final
 ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +  # differences for N vs. S
-  geom_point(aes(color = sp_group)) +
-  stat_smooth(method = "lm", se = T, aes(color = sp_group, fill = sp_group)) +
-  facet_wrap(~aspect)
- 
+  geom_point(aes(color = aspect)) +
+  stat_smooth(method = "lm", aes(color = aspect, fill = aspect)) +   
+  facet_wrap(~sp_group, scales = "free_y")
+
 ggplot(coverage_site, aes(x = sp_group, y = coverage_perc)) +  # difference in coverage per group
   geom_boxplot()
 
@@ -353,9 +350,16 @@ ggplot(richness_site, aes(x = aspect, y = height_site)) +
   geom_boxplot()
 
 ### GIS variable visualizations ----
+## Aspect ---- 
+ggplot(richness_site, aes(y = grazing_m, x = aspect)) +   # grazing by aspect 
+  geom_boxplot()
+
 ## NDVI ----
 ggplot(richness_site, aes(y = ndvi, x = aspect)) +  # ndvi by aspect 
   geom_boxplot()
+
+ggplot(richness_site, aes(y = ndvi, x = wetness)) +  # ndvi with wetness 
+  geom_point()
 
 ggplot(richness_site, aes(x = ndvi, y = richness_siteT)) +  # richness 
   geom_point() +
@@ -414,9 +418,10 @@ ggplot(richness_site, aes(x = grazing_m, y = richness_siteT)) +   # richness + n
   geom_point(aes(color = ndvi)) +
   facet_wrap(~aspect)
 
-ggplot(richness_site, aes(x = grazing_m, y = rich_propT)) +   # rich prop + ndvi + aspect + sp group
-  geom_point(aes(color = ndvi)) +
-  facet_wrap(~aspect + sp_group)
+ggplot(richness_site, aes(x = ndvi, y = rich_propT)) +   # rich prop + ndvi + aspect + sp group
+  geom_point(aes(color = aspect)) +
+  stat_smooth(method = "lm", aes(color = aspect)) +
+  facet_wrap(~sp_group)
 
 ggplot(richness_site, aes(x = grazing_m, y = height_site)) +   # height + ndvi + aspect
   geom_point(aes(color = ndvi)) +
@@ -570,17 +575,17 @@ ggplot(coverage_site, aes(x = wetness, y = coverage_perc)) +  # coverage + sp gr
 
 ## Wetness + Grazing ----
 ggplot(richness, aes(x = grazing_m, y = wetness)) +  # wetness ~ grazing 
-  geom_point() +
-  stat_smooth(method = "lm") 
+  geom_point(aes(color = richness_siteT)) +
+  stat_smooth(method = "loess") 
 
-ggplot(richness, aes(x = grazing_m, y = wetness)) +  # wetness ~ grazing + aspect 
+ggplot(richness, aes(x = wetness, y = grazing_m)) +  # wetness ~ grazing + aspect 
   geom_point(aes(color = aspect)) +
   stat_smooth(method = "lm", aes(color = aspect)) +
   facet_wrap(~aspect)
 
 
 ggplot(richness_site, aes(x = grazing_m, y = richness_siteT)) +   # richness + wetness + aspect
-  geom_point(aes(wetness)) +
+  geom_point(aes(color = wetness)) +
   facet_wrap(~aspect)
 
 ggplot(richness_site, aes(x = grazing_m, y = rich_propT)) +   # rich prop + wetness + aspect + sp group
@@ -601,11 +606,10 @@ ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +   # coverage + we
 
 # . ----
 #### Vegetation Models ----
-ggcorr(richness_site, label = T, label_alpha = T)  
+ggcorr(richness_site, label = T)  
   # slope  and soil depth = quite well negatively correlated (-0.6)
     # soil depth is a very low resolution, so maybe exclude this from models
   # slope and wetness = correlate -0.5, but is less than the threshold for correlation (usually 0.7)
-
 
 ### Richness ~ Grazing (Site) ----
 # only have 34 datapoints due to averaging across plots per site = max 3-4 parameters per model
@@ -628,42 +632,43 @@ AIC(rg1, rga1)  # best is 'rga1' (with aspect)
 
 ### Models with GIS variables
 ## NDVI
-rgan <- lm(richness_siteT ~ grazing_m + aspect + ndvi_s, data = richness_site2)
-rgan2 <- lm(richness_siteT ~ grazing_m * aspect + ndvi_s, data = richness_site2)
-rgan3 <- lm(richness_siteT ~ grazing_m + aspect * ndvi_s, data = richness_site2)
-rgan4 <- lm(richness_siteT ~ grazing_m * ndvi_s + aspect, data = richness_site2)
-rgan5 <- lm(richness_siteT ~ grazing_m * aspect * ndvi_s, data = richness_site2)
-rgan6 <- lm(richness_siteT ~ grazing_m*aspect + ndvi_s*aspect, data = richness_site2)
+rgan <- lm(richness_siteT ~ grazing_m_s + aspect + ndvi_s, data = richness_site2)
+rgan2 <- lm(richness_siteT ~ grazing_m_s * aspect + ndvi_s, data = richness_site2)
+rgan3 <- lm(richness_siteT ~ grazing_m_s + aspect * ndvi_s, data = richness_site2)
+rgan4 <- lm(richness_siteT ~ grazing_m_s * ndvi_s + aspect, data = richness_site2)
+rgan5 <- lm(richness_siteT ~ grazing_m_s * aspect * ndvi_s, data = richness_site2)
+rgan6 <- lm(richness_siteT ~ grazing_m_s*aspect + ndvi_s*aspect, data = richness_site2)
+rgan7 <- lm(richness_siteT ~ aspect + ndvi_s, data = richness_site2)
+rgan8 <- lm(richness_siteT ~ aspect*ndvi_s, data = richness_site2)
 
-AIC(rga1, rgan, rgan2, rgan3, rgan4, rgan5, rgan6)  
+AIC(rga1, rgan, rgan2, rgan3, rgan4, rgan5, rgan6, rgan7, rgan8)  
   # 'rgan3' is a bit better but not by 2 (second best = 'rga1')
 
-
 ## Slope
-rgas <- lm(richness_siteT ~ grazing_m + aspect + slope_deg_s, data = richness_site2)
-rgas2 <- lm(richness_siteT ~ grazing_m * aspect + slope_deg_s, data = richness_site2)
-rgas3 <- lm(richness_siteT ~ grazing_m + aspect * slope_deg_s, data = richness_site2)
-rgas4 <- lm(richness_siteT ~ grazing_m * slope_deg_s + aspect, data = richness_site2)
-rgas5 <- lm(richness_siteT ~ grazing_m * aspect * slope_deg_s, data = richness_site2)
-rgas6 <- lm(richness_siteT ~ grazing_m*aspect + slope_deg_s*aspect, data = richness_site2)
+rgas <- lm(richness_siteT ~ grazing_m_s + aspect + slope_deg_s, data = richness_site2)
+rgas2 <- lm(richness_siteT ~ grazing_m_s * aspect + slope_deg_s, data = richness_site2)
+rgas3 <- lm(richness_siteT ~ grazing_m_s + aspect * slope_deg_s, data = richness_site2)
+rgas4 <- lm(richness_siteT ~ grazing_m_s * slope_deg_s + aspect, data = richness_site2)
+rgas5 <- lm(richness_siteT ~ grazing_m_s * aspect * slope_deg_s, data = richness_site2)
+rgas6 <- lm(richness_siteT ~ grazing_m_s*aspect + slope_deg_s*aspect, data = richness_site2)
 
 AIC(rga1, rgan3, rgas, rgas2, rgas3, rgas4, rgas5, rgas6)  # 'rgas' is best and simplest 
 
 ## Wetness
-rgaw <- lm(richness_siteT ~ grazing_m + aspect + wetness_s, data = richness_site2)
-rgaw2 <- lm(richness_siteT ~ grazing_m * aspect + wetness_s, data = richness_site2)
-rgaw3 <- lm(richness_siteT ~ grazing_m + aspect * wetness_s, data = richness_site2)
-rgaw4 <- lm(richness_siteT ~ grazing_m * wetness_s + aspect, data = richness_site2)
-rgaw5 <- lm(richness_siteT ~ grazing_m * aspect * wetness_s, data = richness_site2)
-rgaw6 <- lm(richness_siteT ~ grazing_m*aspect + wetness_s*aspect, data = richness_site2)
+rgaw <- lm(richness_siteT ~ grazing_m_s + aspect + wetness_s, data = richness_site2)
+rgaw2 <- lm(richness_siteT ~ grazing_m_s * aspect + wetness_s, data = richness_site2)
+rgaw3 <- lm(richness_siteT ~ grazing_m_s + aspect * wetness_s, data = richness_site2)
+rgaw4 <- lm(richness_siteT ~ grazing_m_s * wetness_s + aspect, data = richness_site2)
+rgaw5 <- lm(richness_siteT ~ grazing_m_s * aspect * wetness_s, data = richness_site2)
+rgaw6 <- lm(richness_siteT ~ grazing_m_s*aspect + wetness_s*aspect, data = richness_site2)
 
 AIC(rga1, rgas, rgaw, rgaw2, rgaw3, rgaw4, rgaw5, rgaw6)  
   # 'rgaw3' is best but not by 2 (second best = 'rgaw')
 
 
 ## Adding 1 other variable, no interaction
-rgawn <- lm(richness_siteT ~ grazing_m + aspect + wetness_s + ndvi_s, data = richness_site2)
-rgaws <- lm(richness_siteT ~ grazing_m + aspect + wetness_s + slope_deg_s, data = richness_site2)
+rgawn <- lm(richness_siteT ~ grazing_m_s + aspect + wetness_s + ndvi_s, data = richness_site2)
+rgaws <- lm(richness_siteT ~ grazing_m_s + aspect + wetness_s + slope_deg_s, data = richness_site2)
 
 AIC(rgaw3, rgawn, rgaws)  # 'rgawn' is better (same DF, but lower AIC)
 
@@ -676,18 +681,33 @@ hist(resid(rgawn))
 
 
 ## Richness Model Results ## ----
-# lm(richness_siteT ~ grazing_m + aspect + wetness_s + ndvi_s)
-
+# lm(richness_siteT ~ grazing_m_s + aspect + wetness_s + ndvi_s)
 summary(rgawn)     ## USE THIS MODEL'S RESULTS ##
-  # aspect NORTH (intercept): 17.29699 ± 0.63040
-  # aspect SOUTH: -3.24816 ± 0.70787, p = 7.95e-05 (SIGNIFICANT)
-  # grazing: 0.02265 ± 0.04320, p = 0.6040 (not significant)
-  # wetness: 2.02120 ± 0.38144, p = 1.11e-05 (SIGNIFICANT)
-  # ndvi: 0.71146 ± 0.38480, p = 0.0747 (not significant)
+  # aspect NORTH (intercept): 17.5252 ± 0.4909
+  # aspect SOUTH: -3.2477 ± 0.7079, p = 7.96e-05 (SIGNIFICANT)
+  # grazing_s: 0.1901 ± 0.3655, p = 0.6069 (not significant)
+  # wetness_s: 2.0208 ± 0.3815, p = 1.11e-05 (SIGNIFICANT)
+  # ndvi_s: 0.7114 ± 0.3849, p = 0.0748 (not significant)
 # adjusted R2 = 0.5573
 
 # checking residuals 
 plot(residuals(rgawn) ~ predict(rgawn, type = "response"))  # looks random = good
+
+## Interpreting my model
+# grazing
+  0.1901/sd(richness_site2$grazing_m)   # = 0.02256703
+# wetness
+  2.0208/sd(richness_site2$wetness)   # = 0.1139502
+# ndvi
+  0.7114/sd(richness_site2$ndvi)   # = 13.11307
+
+# comparing to OG model (not scaled)
+rgawn_og <- lm(richness_siteT ~ grazing_m + aspect + wetness + ndvi, richness_site)
+summary(rgawn_og)
+  # grazing = 0.02247
+  # wetness = 0.10946
+  # NDVI = 12.13148
+# similar 
 
 
 ### Richness ~ Grazing (Sp Group Proportions) ----
@@ -728,46 +748,47 @@ AIC(lg_log, lga_log, lga_log2)  # 'lg_log' (only grazing) is best so far
 
 ## Models with GIS variables 
 # NDVI
-lgn_log <- lm(log(rich_propT) ~ grazing_m + ndvi, data = lichen)
-lgan_log <- lm(log(rich_propT) ~ grazing_m + aspect + ndvi, data = lichen)
-lgan_log2 <- lm(log(rich_propT) ~ grazing_m + aspect*ndvi, data = lichen)
-lgan_log3 <- lm(log(rich_propT) ~ grazing_m*aspect + ndvi, data = lichen)
-lgan_log4 <- lm(log(rich_propT) ~ grazing_m*aspect + ndvi*aspect, data = lichen)
+lgn_log <- lm(log(rich_propT) ~ grazing_m_s + ndvi_s, data = lichen)
+lgan_log <- lm(log(rich_propT) ~ grazing_m_s + aspect + ndvi_s, data = lichen)
+lgan_log2 <- lm(log(rich_propT) ~ grazing_m_s + aspect*ndvi_s, data = lichen)
+lgan_log3 <- lm(log(rich_propT) ~ grazing_m_s*aspect + ndvi_s, data = lichen)
+lgan_log4 <- lm(log(rich_propT) ~ grazing_m_s*aspect + ndvi_s*aspect, data = lichen)
 
 AIC(lg_log, lga_log, lgn_log, lgan_log, lgan_log2, lgan_log3, lgan_log4)
   # 'lgan_log3' = lowest, but not quite by 2 units (next best is 'lgn_log')
 
 # Slope
-lgs_log <- lm(log(rich_propT) ~ grazing_m + slope_deg, data = lichen)
-lgas_log <- lm(log(rich_propT) ~ grazing_m + aspect + slope_deg, data = lichen)
-lgas_log2 <- lm(log(rich_propT) ~ grazing_m + aspect*slope_deg, data = lichen)
-lgas_log3 <- lm(log(rich_propT) ~ grazing_m*aspect + slope_deg, data = lichen)
-lgas_log4 <- lm(log(rich_propT) ~ grazing_m*aspect + slope_deg*aspect, data = lichen)
+lgs_log <- lm(log(rich_propT) ~ grazing_m_s + slope_deg_s, data = lichen)
+lgas_log <- lm(log(rich_propT) ~ grazing_m_s + aspect + slope_deg_s, data = lichen)
+lgas_log2 <- lm(log(rich_propT) ~ grazing_m_s + aspect*slope_deg_s, data = lichen)
+lgas_log3 <- lm(log(rich_propT) ~ grazing_m_s*aspect + slope_deg_s, data = lichen)
+lgas_log4 <- lm(log(rich_propT) ~ grazing_m_s*aspect + slope_deg_s*aspect, data = lichen)
 
 AIC(lgan_log3, lgn_log, lg_log, lga_log, lgs_log, lgas_log, lgas_log2, lgas_log3, lgas_log4)
   # 'lgan_log3' = still best 
 
 # Wetness
-lgw_log <- lm(log(rich_propT) ~ grazing_m + wetness, data = lichen)
-lgaw_log <- lm(log(rich_propT) ~ grazing_m + aspect + wetness, data = lichen)
-lgaw_log2 <- lm(log(rich_propT) ~ grazing_m + aspect*wetness, data = lichen)
-lgaw_log3 <- lm(log(rich_propT) ~ grazing_m*aspect + wetness, data = lichen)
-lgaw_log4 <- lm(log(rich_propT) ~ grazing_m*aspect + wetness*aspect, data = lichen)
+lgw_log <- lm(log(rich_propT) ~ grazing_m_s + wetness_s, data = lichen)
+lgaw_log <- lm(log(rich_propT) ~ grazing_m_s + aspect + wetness_s, data = lichen)
+lgaw_log2 <- lm(log(rich_propT) ~ grazing_m_s + aspect*wetness_s, data = lichen)
+lgaw_log3 <- lm(log(rich_propT) ~ grazing_m_s*aspect + wetness_s, data = lichen)
+lgaw_log4 <- lm(log(rich_propT) ~ grazing_m_s*aspect + wetness_s*aspect, data = lichen)
 
 AIC(lgan_log3, lgn_log, lg_log, lga_log, lgw_log, lgaw_log, lgaw_log2, lgaw_log3, lgaw_log4)
   # 'lgan_log3' = still best
 
-# NDVI + 1 other (no interactions due to overfitting)
-lgns_log <- lm(log(rich_propT) ~ grazing_m + ndvi_s + slope_deg_s, data = lichen)  # standardized
-lgans_log <- lm(log(rich_propT) ~ grazing_m + aspect + ndvi_s + slope_deg_s, data = lichen)  
+# Multiple variables 
+lgns_log <- lm(log(rich_propT) ~ grazing_m_s + ndvi_s + slope_deg_s, data = lichen)  # standardized
+lgans_log <- lm(log(rich_propT) ~ grazing_m_s + aspect + ndvi_s + slope_deg_s, data = lichen)  
 
-lgnw_log <- lm(log(rich_propT) ~ grazing_m + ndvi_s + wetness_s, data = lichen)  # standardized
-lganw_log <- lm(log(rich_propT) ~ grazing_m + aspect + ndvi_s + wetness_s, data = lichen)  
+lgnw_log <- lm(log(rich_propT) ~ grazing_m_s + ndvi_s + wetness_s, data = lichen)  # standardized
+lgnw_log2 <- lm(log(rich_propT) ~ grazing_m_s + ndvi_s*wetness_s, data = lichen)
+lganw_log <- lm(log(rich_propT) ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = lichen)  
 
-min(AIC(lgan_log3, lgn_log, lgns_log, lgans_log, lgnw_log, lganw_log)[,2])    
+min(AIC(lgan_log3, lgn_log, lgns_log, lgans_log, lgnw_log, lgnw_log2, lganw_log)[,2])    
   # lowest == -8.187243
 
-AIC(lgan_log3, lgn_log, lgns_log, lgans_log, lgnw_log, lganw_log)
+AIC(lgan_log3, lgn_log, lgns_log, lgans_log, lgnw_log, lgnw_log2, lganw_log)
   # 'lgan_log3' = still lowest, but not by 2 
 
 
@@ -800,49 +821,51 @@ AIC(mg1, mga, mga2)  # so far, 'mga' is best but not by 2
 
 ## Models with GIS variables 
 # NDVI
-mgn <- lm(rich_propT ~ grazing_m + ndvi, data = moss)
-mgan <- lm(rich_propT ~ grazing_m + aspect + ndvi, data = moss)
-mgan2 <- lm(rich_propT ~ grazing_m + aspect*ndvi, data = moss)
-mgan3 <- lm(rich_propT ~ grazing_m*aspect + ndvi, data = moss)
-mgan4 <- lm(rich_propT ~ grazing_m*aspect + ndvi*aspect, data = moss)
+mgn <- lm(rich_propT ~ grazing_m_s + ndvi_s, data = moss)
+mgan <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s, data = moss)
+mgan2 <- lm(rich_propT ~ grazing_m_s + aspect*ndvi_s, data = moss)
+mgan3 <- lm(rich_propT ~ grazing_m_s*aspect + ndvi_s, data = moss)
+mgan4 <- lm(rich_propT ~ grazing_m_s*aspect + ndvi_s*aspect, data = moss)
 
 AIC(mg1, mga, mgn, mgan, mgan2, mgan3, mgan4)
   # 'mgan' = lowest, but not by 2 units (next best is 'mga' or 'mg1)
 
 # Slope
-mgs <- lm(rich_propT ~ grazing_m + slope_deg, data = moss)
-mgas <- lm(rich_propT ~ grazing_m + aspect + slope_deg, data = moss)
-mgas2 <- lm(rich_propT ~ grazing_m + aspect*slope_deg, data = moss)
-mgas3 <- lm(rich_propT ~ grazing_m*aspect + slope_deg, data = moss)
-mgas4 <- lm(rich_propT ~ grazing_m*aspect + slope_deg*aspect, data = moss)
+mgs <- lm(rich_propT ~ grazing_m_s + slope_deg_s, data = moss)
+mgas <- lm(rich_propT ~ grazing_m_s + aspect + slope_deg_s, data = moss)
+mgas2 <- lm(rich_propT ~ grazing_m_s + aspect*slope_deg_s, data = moss)
+mgas3 <- lm(rich_propT ~ grazing_m_s*aspect + slope_deg_s, data = moss)
+mgas4 <- lm(rich_propT ~ grazing_m_s*aspect + slope_deg_s*aspect, data = moss)
 
 AIC(mgan, mg1, mga, mgs, mgas, mgas2, mgas3, mgas4)
   # 'mgan' = still best 
 
 # Wetness
-mgw <- lm(rich_propT ~ grazing_m + wetness, data = moss)
-mgaw <- lm(rich_propT ~ grazing_m + aspect + wetness, data = moss)
-mgaw2 <- lm(rich_propT ~ grazing_m + aspect*wetness, data = moss)
-mgaw3 <- lm(rich_propT ~ grazing_m*aspect + wetness, data = moss)
-mgaw4 <- lm(rich_propT ~ grazing_m*aspect + wetness*aspect, data = moss)
+mgw <- lm(rich_propT ~ grazing_m_s + wetness_s, data = moss)
+mgaw <- lm(rich_propT ~ grazing_m_s + aspect + wetness_s, data = moss)
+mgaw2 <- lm(rich_propT ~ grazing_m_s + aspect*wetness_s, data = moss)
+mgaw3 <- lm(rich_propT ~ grazing_m_s*aspect + wetness_s, data = moss)
+mgaw4 <- lm(rich_propT ~ grazing_m_s*aspect + wetness_s*aspect, data = moss)
 
 AIC(mgan, mg1, mga, mgw, mgaw, mgaw2, mgaw3, mgaw4)
   # 'mgaw2' = lowest, but close to 'mgw' and 'mgan'
 
-# Multiple GIS var (no interactions)
-mgnw <- lm(rich_propT ~ grazing_m + ndvi_s + wetness_s, data = moss)  # standardized
-mganw <- lm(rich_propT ~ grazing_m + aspect + ndvi_s + wetness_s, data = moss)  # standardized
+# Multiple GIS variables 
+mgnw <- lm(rich_propT ~ grazing_m_s + ndvi_s + wetness_s, data = moss)  # standardized
+mgnw2 <- lm(rich_propT ~ grazing_m_s + ndvi_s*wetness_s, data = moss)  # standardized
+mganw <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = moss)  
 
-mgns <- lm(rich_propT ~ grazing_m + ndvi_s + slope_deg_s, data = moss)  # standardized
-mgans <- lm(rich_propT ~ grazing_m + aspect + ndvi_s + slope_deg_s, data = moss)  
+mgns <- lm(rich_propT ~ grazing_m_s + ndvi_s + slope_deg_s, data = moss)  # standardized
+mgans <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s + slope_deg_s, data = moss)  
 
-mgws <- lm(rich_propT ~ grazing_m + wetness_s + slope_deg_s, data = moss)  # standardized
-mgaws <- lm(rich_propT ~ grazing_m + aspect + wetness_s + slope_deg_s, data = moss)  
+mgws <- lm(rich_propT ~ grazing_m_s + wetness_s + slope_deg_s, data = moss)  # standardized
+mgws2 <- lm(rich_propT ~ grazing_m_s + wetness_s*slope_deg_s, data = moss)  # standardized
+mgaws <- lm(rich_propT ~ grazing_m_s + aspect + wetness_s + slope_deg_s, data = moss)  
 
-min(AIC(mgan, mgaw2, mgw, mgnw, mganw, mgns, mgans, mgws, mgaws)[,2])    
+min(AIC(mgan, mgaw2, mgw, mgnw, mgnw2, mganw, mgns, mgans, mgws, mgws2, mgaws)[,2])    
   # lowest == -108.0255
 
-AIC(mgan, mgaw2, mgw, mgnw, mganw, mgns, mgans, mgws, mgaws)
+AIC(mgan, mgaw2, mgw, mgnw, mgnw2, mganw, mgns, mgans, mgws, mgws2, mgaws)
   # 'mganw' = lowest with 6 DF, but not by 2 
   # lowest and simplest = 'mgw' 
 
@@ -873,49 +896,51 @@ AIC(sg1, sga, sga2)  # so far, all are equal (sg1 = simplest)
 
 ## Models with GIS variables 
 # NDVI
-sgn <- lm(rich_propT ~ grazing_m + ndvi, data = shrub)
-sgan <- lm(rich_propT ~ grazing_m + aspect + ndvi, data = shrub)
-sgan2 <- lm(rich_propT ~ grazing_m + aspect*ndvi, data = shrub)
-sgan3 <- lm(rich_propT ~ grazing_m*aspect + ndvi, data = shrub)
-sgan4 <- lm(rich_propT ~ grazing_m*aspect + ndvi*aspect, data = shrub)
+sgn <- lm(rich_propT ~ grazing_m_s + ndvi_s, data = shrub)
+sgan <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s, data = shrub)
+sgan2 <- lm(rich_propT ~ grazing_m_s + aspect*ndvi_s, data = shrub)
+sgan3 <- lm(rich_propT ~ grazing_m_s*aspect + ndvi_s, data = shrub)
+sgan4 <- lm(rich_propT ~ grazing_m_s*aspect + ndvi_s*aspect, data = shrub)
 
 AIC(sg1, sga, sgn, sgan, sgan2, sgan3, sgan4)
   # 'sg1' = best because it's the simplest 
 
 # Slope
-sgs <- lm(rich_propT ~ grazing_m + slope_deg, data = shrub)
-sgas <- lm(rich_propT ~ grazing_m + aspect + slope_deg, data = shrub)
-sgas2 <- lm(rich_propT ~ grazing_m + aspect*slope_deg, data = shrub)
-sgas3 <- lm(rich_propT ~ grazing_m*aspect + slope_deg, data = shrub)
-sgas4 <- lm(rich_propT ~ grazing_m*aspect + slope_deg*aspect, data = shrub)
+sgs <- lm(rich_propT ~ grazing_m_s + slope_deg_s, data = shrub)
+sgas <- lm(rich_propT ~ grazing_m_s + aspect + slope_deg_s, data = shrub)
+sgas2 <- lm(rich_propT ~ grazing_m_s + aspect*slope_deg_s, data = shrub)
+sgas3 <- lm(rich_propT ~ grazing_m_s*aspect + slope_deg_s, data = shrub)
+sgas4 <- lm(rich_propT ~ grazing_m_s*aspect + slope_deg_s*aspect, data = shrub)
 
 AIC(sg1, sga, sgs, sgas, sgas2, sgas3, sgas4)
 # 'sgas' = simpler than others that low, but not lowest by 2 (second best = 'sgs')
 
 # Wetness
-sgw <- lm(rich_propT ~ grazing_m + wetness, data = shrub)
-sgaw <- lm(rich_propT ~ grazing_m + aspect + wetness, data = shrub)
-sgaw2 <- lm(rich_propT ~ grazing_m + aspect*wetness, data = shrub)
-sgaw3 <- lm(rich_propT ~ grazing_m*aspect + wetness, data = shrub)
-sgaw4 <- lm(rich_propT ~ grazing_m*aspect + wetness*aspect, data = shrub)
+sgw <- lm(rich_propT ~ grazing_m_s + wetness_s, data = shrub)
+sgaw <- lm(rich_propT ~ grazing_m_s + aspect + wetness_s, data = shrub)
+sgaw2 <- lm(rich_propT ~ grazing_m_s + aspect*wetness_s, data = shrub)
+sgaw3 <- lm(rich_propT ~ grazing_m_s*aspect + wetness_s, data = shrub)
+sgaw4 <- lm(rich_propT ~ grazing_m_s*aspect + wetness_s*aspect, data = shrub)
 
 AIC(sgas, sgs, sg1, sga, sgw, sgaw, sgaw2, sgaw3, sgaw4)
 # 'sgaw3' = lowest, but not quite by 2 (second lowest/simplest = 'sgaw')
 
-# Multiple GIS var (no interactions)
-sgnw <- lm(rich_propT ~ grazing_m + ndvi_s + wetness_s, data = shrub)  # standardized
-sganw <- lm(rich_propT ~ grazing_m + aspect + ndvi_s + wetness_s, data = shrub)  # standardized
+# Multiple GIS var
+sgnw <- lm(rich_propT ~ grazing_m_s + ndvi_s + wetness_s, data = shrub)  # standardized
+sgnw2 <- lm(rich_propT ~ grazing_m_s + ndvi_s*wetness_s, data = shrub)  # standardized
+sganw <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = shrub)  
 
-sgns <- lm(rich_propT ~ grazing_m + ndvi_s + slope_deg_s, data = shrub)  # standardized
-sgans <- lm(rich_propT ~ grazing_m + aspect + ndvi_s + slope_deg_s, data = shrub)  
+sgns <- lm(rich_propT ~ grazing_m_s + ndvi_s + slope_deg_s, data = shrub)  # standardized
+sgans <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s + slope_deg_s, data = shrub)  
 
-sgws <- lm(rich_propT ~ grazing_m + wetness_s + slope_deg_s, data = shrub)  # standardized
-sgaws <- lm(rich_propT ~ grazing_m + aspect + wetness_s + slope_deg_s, data = shrub)  
+sgws <- lm(rich_propT ~ grazing_m_s + wetness_s + slope_deg_s, data = shrub)  # standardized
+sgws2 <- lm(rich_propT ~ grazing_m_s + wetness_s*slope_deg_s, data = shrub)  # standardized
+sgaws <- lm(rich_propT ~ grazing_m_s + aspect + wetness_s + slope_deg_s, data = shrub)  
 
-min(AIC(sgaw3, sgaw, sgas, sgnw, sganw, sgns, sgans, sgws, sgaws)[,2])    
+min(AIC(sgaw3, sgaw, sgas, sgnw, sgnw2, sganw, sgns, sgans, sgws, sgws2, sgaws)[,2])    
 # lowest == -95.05383
 
-AIC(sgaw3, sgaw, sgas, sgnw, sganw, sgns, sgans, sgws, sgaws)
+AIC(sgaw3, sgaw, sgas, sgnw, sgnw2, sganw, sgns, sgans, sgws, sgws2, sgaws)
 # 'sgaw3' = lowest with 6 DF, but not by 2 (second = 'sgaw')
 
 
@@ -949,49 +974,51 @@ AIC(gg1, gga, gga2)  # 'gg1' = the best
 
 ## Models with GIS variables 
 # NDVI
-ggn <- lm(rich_propT ~ grazing_m + ndvi, data = grass)
-ggan <- lm(rich_propT ~ grazing_m + aspect + ndvi, data = grass)
-ggan2 <- lm(rich_propT ~ grazing_m + aspect*ndvi, data = grass)
-ggan3 <- lm(rich_propT ~ grazing_m*aspect + ndvi, data = grass)
-ggan4 <- lm(rich_propT ~ grazing_m*aspect + ndvi*aspect, data = grass)
+ggn <- lm(rich_propT ~ grazing_m_s + ndvi_s, data = grass)
+ggan <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s, data = grass)
+ggan2 <- lm(rich_propT ~ grazing_m_s + aspect*ndvi_s, data = grass)
+ggan3 <- lm(rich_propT ~ grazing_m_s*aspect + ndvi_s, data = grass)
+ggan4 <- lm(rich_propT ~ grazing_m_s*aspect + ndvi_s*aspect, data = grass)
 
 AIC(gg1, ggn, ggan, ggan2, ggan3, ggan4)
 # 'gg1' = best because it's the simplest 
 
 # Slope
-ggs <- lm(rich_propT ~ grazing_m + slope_deg, data = grass)
-ggas <- lm(rich_propT ~ grazing_m + aspect + slope_deg, data = grass)
-ggas2 <- lm(rich_propT ~ grazing_m + aspect*slope_deg, data = grass)
-ggas3 <- lm(rich_propT ~ grazing_m*aspect + slope_deg, data = grass)
-ggas4 <- lm(rich_propT ~ grazing_m*aspect + slope_deg*aspect, data = grass)
+ggs <- lm(rich_propT ~ grazing_m_s + slope_deg_s, data = grass)
+ggas <- lm(rich_propT ~ grazing_m_s + aspect + slope_deg_s, data = grass)
+ggas2 <- lm(rich_propT ~ grazing_m_s + aspect*slope_deg_s, data = grass)
+ggas3 <- lm(rich_propT ~ grazing_m_s*aspect + slope_deg_s, data = grass)
+ggas4 <- lm(rich_propT ~ grazing_m_s*aspect + slope_deg_s*aspect, data = grass)
 
 AIC(gg1, ggs, ggas, ggas2, ggas3, ggas4)
 # 'gg1' = still best
 
 # Wetness
-ggw <- lm(rich_propT ~ grazing_m + wetness, data = grass)
-ggaw <- lm(rich_propT ~ grazing_m + aspect + wetness, data = grass)
-ggaw2 <- lm(rich_propT ~ grazing_m + aspect*wetness, data = grass)
-ggaw3 <- lm(rich_propT ~ grazing_m*aspect + wetness, data = grass)
-ggaw4 <- lm(rich_propT ~ grazing_m*aspect + wetness*aspect, data = grass)
+ggw <- lm(rich_propT ~ grazing_m_s + wetness_s, data = grass)
+ggaw <- lm(rich_propT ~ grazing_m_s + aspect + wetness_s, data = grass)
+ggaw2 <- lm(rich_propT ~ grazing_m_s + aspect*wetness_s, data = grass)
+ggaw3 <- lm(rich_propT ~ grazing_m_s*aspect + wetness_s, data = grass)
+ggaw4 <- lm(rich_propT ~ grazing_m_s*aspect + wetness_s*aspect, data = grass)
 
 AIC(gg1, gga, ggw, ggaw, ggaw2, ggaw3, ggaw4)
 # 'ggaw4' = the best by far 
 
-# Multiple GIS var (no interactions)
-ggnw <- lm(rich_propT ~ grazing_m + ndvi_s + wetness_s, data = grass)  # standardized
-gganw <- lm(rich_propT ~ grazing_m + aspect + ndvi_s + wetness_s, data = grass)  # standardized
+# Multiple GIS var 
+ggnw <- lm(rich_propT ~ grazing_m_s + ndvi_s + wetness_s, data = grass)  # standardized
+ggnw2 <- lm(rich_propT ~ grazing_m_s + ndvi_s*wetness_s, data = grass)  
+gganw <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = grass) 
 
-ggns <- lm(rich_propT ~ grazing_m + ndvi_s + slope_deg_s, data = grass)  # standardized
-ggans <- lm(rich_propT ~ grazing_m + aspect + ndvi_s + slope_deg_s, data = grass)  
+ggns <- lm(rich_propT ~ grazing_m_s + ndvi_s + slope_deg_s, data = grass)  # standardized
+ggans <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s + slope_deg_s, data = grass)  
 
-ggws <- lm(rich_propT ~ grazing_m + wetness_s + slope_deg_s, data = grass)  # standardized
-ggaws <- lm(rich_propT ~ grazing_m + aspect + wetness_s + slope_deg_s, data = grass)  
+ggws <- lm(rich_propT ~ grazing_m_s + wetness_s + slope_deg_s, data = grass)  # standardized
+ggws2 <- lm(rich_propT ~ grazing_m_s + wetness_s*slope_deg_s, data = grass)  # standardized
+ggaws <- lm(rich_propT ~ grazing_m_s + aspect + wetness_s + slope_deg_s, data = grass)  
 
-min(AIC(ggaw4, gg1, ggnw, gganw, ggns, ggans, ggws, ggaws)[,2])    
+min(AIC(ggaw4, gg1, ggnw, ggnw2, gganw, ggns, ggans, ggws, ggws2, ggaws)[,2])    
   # lowest == -121.2405
 
-AIC(ggaw4, gg1, ggnw, gganw, ggns, ggans, ggws, ggaws)
+AIC(ggaw4, gg1, ggnw, ggnw2, gganw, ggns, ggans, ggws, ggws2, ggaws)
   # 'ggaw4' = best 
 
 
@@ -1024,49 +1051,51 @@ AIC(hg1, hga, hga2)  # 'hg1' = the best
 
 ## Models with GIS variables 
 # NDVI
-hgn <- lm(rich_propT ~ grazing_m + ndvi, data = herb)
-hgan <- lm(rich_propT ~ grazing_m + aspect + ndvi, data = herb)
-hgan2 <- lm(rich_propT ~ grazing_m + aspect*ndvi, data = herb)
-hgan3 <- lm(rich_propT ~ grazing_m*aspect + ndvi, data = herb)
-hgan4 <- lm(rich_propT ~ grazing_m*aspect + ndvi*aspect, data = herb)
+hgn <- lm(rich_propT ~ grazing_m_s + ndvi_s, data = herb)
+hgan <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s, data = herb)
+hgan2 <- lm(rich_propT ~ grazing_m_s + aspect*ndvi_s, data = herb)
+hgan3 <- lm(rich_propT ~ grazing_m_s*aspect + ndvi_s, data = herb)
+hgan4 <- lm(rich_propT ~ grazing_m_s*aspect + ndvi_s*aspect, data = herb)
 
 AIC(hg1, hgn, hgan, hgan2, hgan3, hgan4)
   # 'hg1' = still best
 
 # Slope
-hgs <- lm(rich_propT ~ grazing_m + slope_deg, data = herb)
-hgas <- lm(rich_propT ~ grazing_m + aspect + slope_deg, data = herb)
-hgas2 <- lm(rich_propT ~ grazing_m + aspect*slope_deg, data = herb)
-hgas3 <- lm(rich_propT ~ grazing_m*aspect + slope_deg, data = herb)
-hgas4 <- lm(rich_propT ~ grazing_m*aspect + slope_deg*aspect, data = herb)
+hgs <- lm(rich_propT ~ grazing_m_s + slope_deg_s, data = herb)
+hgas <- lm(rich_propT ~ grazing_m_s + aspect + slope_deg_s, data = herb)
+hgas2 <- lm(rich_propT ~ grazing_m_s + aspect*slope_deg_s, data = herb)
+hgas3 <- lm(rich_propT ~ grazing_m_s*aspect + slope_deg_s, data = herb)
+hgas4 <- lm(rich_propT ~ grazing_m_s*aspect + slope_deg_s*aspect, data = herb)
 
 AIC(hg1, hgs, hgas, hgas2, hgas3, hgas4)
   # 'hgs' = best, but juuust under 2 units (otherwise 'hg1' is best still)
 
 # Wetness
-hgw <- lm(rich_propT ~ grazing_m + wetness, data = herb)
-hgaw <- lm(rich_propT ~ grazing_m + aspect + wetness, data = herb)
-hgaw2 <- lm(rich_propT ~ grazing_m + aspect*wetness, data = herb)
-hgaw3 <- lm(rich_propT ~ grazing_m*aspect + wetness, data = herb)
-hgaw4 <- lm(rich_propT ~ grazing_m*aspect + wetness*aspect, data = herb)
+hgw <- lm(rich_propT ~ grazing_m_s + wetness_s, data = herb)
+hgaw <- lm(rich_propT ~ grazing_m_s + aspect + wetness_s, data = herb)
+hgaw2 <- lm(rich_propT ~ grazing_m_s + aspect*wetness_s, data = herb)
+hgaw3 <- lm(rich_propT ~ grazing_m_s*aspect + wetness_s, data = herb)
+hgaw4 <- lm(rich_propT ~ grazing_m_s*aspect + wetness_s*aspect, data = herb)
 
 AIC(hg1, hgs, hgw, hgaw, hgaw2, hgaw3, hgaw4)
   # 'hgaw' = the best, but under 2 units (next best = 'hgw')
 
 # Multiple GIS var (no interactions)
-hgnw <- lm(rich_propT ~ grazing_m + ndvi_s + wetness_s, data = herb)  # standardized
-hganw <- lm(rich_propT ~ grazing_m + aspect + ndvi_s + wetness_s, data = herb)  # standardized
+hgnw <- lm(rich_propT ~ grazing_m_s + ndvi_s + wetness_s, data = herb)  # standardized
+hgnw2 <- lm(rich_propT ~ grazing_m_s + ndvi_s*wetness_s, data = herb)  
+hganw <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = herb)  
 
-hgns <- lm(rich_propT ~ grazing_m + ndvi_s + slope_deg_s, data = herb)  # standardized
-hgans <- lm(rich_propT ~ grazing_m + aspect + ndvi_s + slope_deg_s, data = herb)  
+hgns <- lm(rich_propT ~ grazing_m_s + ndvi_s + slope_deg_s, data = herb)  # standardized
+hgans <- lm(rich_propT ~ grazing_m_s + aspect + ndvi_s + slope_deg_s, data = herb)  
 
-hgws <- lm(rich_propT ~ grazing_m + wetness_s + slope_deg_s, data = herb)  # standardized
-hgaws <- lm(rich_propT ~ grazing_m + aspect + wetness_s + slope_deg_s, data = herb)  
+hgws <- lm(rich_propT ~ grazing_m_s + wetness_s + slope_deg_s, data = herb)  # standardized
+hgws2 <- lm(rich_propT ~ grazing_m_s + wetness_s*slope_deg_s, data = herb)  
+hgaws <- lm(rich_propT ~ grazing_m_s + aspect + wetness_s + slope_deg_s, data = herb)  
 
-min(AIC(hgaw, hgw, hg1, hgnw, hganw, hgns, hgans, hgws, hgaws)[,2])    
+min(AIC(hgaw, hgw, hg1, hgnw, hgnw2, hganw, hgns, hgans, hgws, hgws2, hgaws)[,2])    
   # lowest == -97.06862
 
-AIC(hgaw, hgw, hg1, hgnw, hganw, hgns, hgans, hgws, hgaws)
+AIC(hgaw, hgw, hg1, hgnw, hgnw2, hganw, hgns, hgans, hgws, hgws2, hgaws)
   # 'hgaw' = still best and simplest 
 
 
@@ -1074,85 +1103,146 @@ AIC(hgaw, hgw, hg1, hgnw, hganw, hgns, hgans, hgws, hgaws)
 h_null <- lm(rich_propT ~ 1, data = herb)
 AIC(h_null, hgaw, hgw)   # 'hgaw' is better than the null
 
-shapiro.test(resid(hgaw))  # not normal, not good!! 
-bptest(hgaw)  # no heteroskedasticity though
-
-shapiro.test(resid(hgw))  # also not normal (very close though)
-bptest(hgw)  # no heteroskedasticity though
-
-# other previous options
-shapiro.test(resid(hgs))  # normal 
-bptest(hgs)  # no heteroskedasticity
-
-shapiro.test(resid(hgws))  # normal 
-bptest(hgws)  # no heteroskedasticity
-
-shapiro.test(resid(hgnw))  # normal 
-bptest(hgnw)  # no heteroskedasticity
-
-AIC(hg1, hgs, hgws, hgnw)  # 'hgws' and 'hgnw' are nearly identical and both 5 DF 
-
-summary(hgws)  # adjusted R2 = 0.3007 
-summary(hgnw)  # adjusted R2 = 0.2972, not quite as good so going with 'hgws' 
+shapiro.test(resid(hgaw))  # normal
+bptest(hgaw)  # no heteroskedasticity 
 
 
 ## Richness Proportion Model Results ## ----
-# LICHEN = lm(log(rich_propT) ~ grazing_m*aspect + ndvi
+# LICHEN = lm(log(rich_propT) ~ grazing_m_s*aspect + ndvi_s
 summary(lgan_log3)      ## USE THIS MODEL'S RESULTS ##
-  # aspect NORTH (intercept): exp(-0.988860) ± exp(0.095693)
-  # aspect SOUTH: exp(0.246075) ± exp(0.106666), p = 0.0284 (SIGNIFICANT)
-  # grazing NORTH: exp(0.001364) ± exp(0.005686), p = 0.8121 (not significant) 
-  # grazing*aspect SOUTH: exp(-0.015027) ± exp(0.008055), p = 0.0722 (not significant)
-  # ndvi: exp(-2.974119) ± exp(0.644816), p = 7.44e-05 (SIGNFICANT)    
-# adjusted R2 = 0.3918 
-
-summary(glm(rich_propT ~ grazing_m*aspect + ndvi, data = lichen))
+  # aspect NORTH (intercept): exp(-1.27895) ± exp(0.04787)
+  # aspect SOUTH: exp(0.09448) ± exp(0.06852), p = 0.1785 (not significant)
+  # grazing_s NORTH: exp(0.01116) ± exp(0.04812), p = 0.8183 (not significant) 
+  # grazing_s*aspect SOUTH: exp(-0.12673) ± exp(0.06815), p = 0.0731 (not significant)
+  # ndvi_s: exp(-0.17443) ± exp(0.03781), p = 7.42e-05 (SIGNFICANT)    
+# adjusted R2 = 0.3917 
 
 # checking residuals 
 plot(residuals(lgan_log3) ~ predict(lgan_log3, type = "response"))  # looks good 
 
+## Interpreting my model
+# grazing N
+0.01116/sd(lichen$grazing_m)  # = 0.001324819
+# grazing S
+-0.12673/sd(lichen$grazing_m)  # = -0.01504429
+# ndvi
+-0.17443/sd(lichen$ndvi)    # = -3.215228
 
-# MOSS = lm(rich_propT ~ grazing_m + aspect + ndvi_s + wetness_s)
+# comparing to OG model (not scaled)
+lgan_log3_og <- lm(log(rich_propT) ~ grazing_m*aspect + ndvi, data = lichen)
+summary(lgan_log3_og)
+  # grazing N = 0.001319
+  # grazing S = -0.014982
+  # NDVI = -2.974657
+# similar 
+
+
+# MOSS = lm(rich_propT ~ grazing_m_s + aspect + ndvi_s + wetness_s)
 summary(mganw)      ## USE THIS MODEL'S RESULTS ##
-  # aspect NORTH (intercept): 0.1942 ± 0.01427
-  # aspect SOUTH: -2.670e-02 ± 1.601e-02, p = 0.1063 (not significant)
-  # grazing: -6.093e-05 ± 9.774e-04, p = 0.9507 (not significant)
-  # ndvi_s: 1.559e-02 ± 8.707e-03, p = 0.0839 (not significant)
-  # wetness_s: -1.765e-02 ± 8.631e-03, p = 0.0501 (not significant)
+  # aspect NORTH (intercept): 0.1935644 ± 0.0111056
+  # aspect SOUTH: -0.0266947 ± 0.0160144, p = 0.1063 (not significant)
+  # grazing_s: -0.0005226 ± 0.0082679, p = 0.9500 (not significant)
+  # ndvi_s: 0.0155851 ± 0.0087063, p = 0.0839 (not significant)
+  # wetness_s: -0.0176485 ± 0.0086303, p = 0.0500 (not significant)
 # adjusted R2 = 0.1584
 
 # checking residuals 
 plot(residuals(mganw) ~ predict(mganw, type = "response"))  # not fantastic but ok  
 
+## Interpreting my model
+# grazing 
+-0.0005226/sd(moss$grazing_m)  # = -6.203857e-05
+# ndvi
+0.0155851/sd(richness_site2$ndvi)    # = 0.2872766
+# wetness
+-0.0176485/sd(richness_site2$wetness)    # = -0.0009951751
 
-# SHRUB = lm(rich_propT ~ grazing_m*aspect + wetness)
+
+# comparing to OG model (not scaled)
+mganw_og <- lm(rich_propT ~ grazing_m + aspect + ndvi + wetness, data = moss)
+summary(mganw_og)
+  # grazing = -6.178e-05
+  # NDVI = 2.658e-01
+  # wetness = -9.560e-04
+# very similar 
+
+summary(lm(rich_propT ~ grazing_m_s * aspect + wetness_s * aspect, data = shrub))
+
+# SHRUB = lm(rich_propT ~ grazing_m_s*aspect + wetness_s)
 summary(sgaw3)      ## USE THIS MODEL'S RESULTS ##
-  # aspect NORTH (intercept): 0.2277240 ± 0.0218229
-  # aspect SOUTH: 0.0875288 ± 0.0303873, p = 0.00739 (SIGNIFICANT)
-  # grazing NORTH: 0.0025284 ± 0.0015876, p = 0.12208 (not significant)
-  # grazing*aspect SOUTH: -0.0042378 ± 0.0022884, p = 0.07425 (not significant)
-  # wetness: -0.001661 ± 0.0005768, p = 0.00741 (SIGNIFICANT)
-# adjusted R2 = 0.2562
+  # aspect NORTH (intercept): 0.22966 ± 0.01327
+  # aspect SOUTH: 0.04475 ± 0.01894, p = 0.02507 (SIGNIFICANT)
+  # grazing_s NORTH: 0.02146 ± 0.01343, p = 0.12088 (not significant)
+  # grazing_s*aspect SOUTH: -0.03592 ± 0.01936, p = 0.07367 (not significant)
+  # wetness_s: -0.03067 ± 0.01065, p = 0.00739 (SIGNIFICANT)
+# adjusted R2 = 0.2566
+
+## Interpreting my model
+# grazing N
+0.02146/sd(shrub$grazing_m)  # = 0.002547546
+# grazing S
+-0.03592/sd(shrub$grazing_m)  # = -0.004264113
+# wetness
+-0.03067/sd(shrub$wetness)    # = -0.00172944
+
+# comparing to OG model (not scaled)
+sgaw3_og <- lm(rich_propT ~ grazing_m*aspect + wetness, data = shrub)
+summary(sgaw3_og)
+  # grazing N = 0.0025373
+  # grazing S = -0.0042468
+  # wetness = -0.0016611
+# very similar 
 
 
-# GRASS = lm(rich_propT ~ grazing_m * aspect + wetness * aspect)
+# GRASS = lm(rich_propT ~ grazing_m_s*aspect + wetness_s*aspect)
 summary(ggaw4)      ## USE THIS MODEL'S RESULTS ##
-  # aspect NORTH (intercept): 0.1245445 ± 0.0188888
-  # aspect SOUTH: -0.0112339 ± 0.0263743, p = 0.67341 (not significant)
-  # grazing NORTH: -0.0012814 ± 0.0010867, p = 0.24825 (not significant)
-  # grazing*aspect SOUTH: 0.0037707 ± 0.0015847, p = 0.02439 (SIGNIFICANT)
-  # wetness NORTH: 0.0029631 ± 0.0009494, p = 0.00415 (SIGNIFICANT)
-  # wetness*aspect SOUTH: -0.0021441 ± 0.0010401, p = 0.04866 (SIGNIFICANT)
-# adjusted R2 = 0.3076
+  # aspect NORTH (intercept): 0.153703 ± 0.009261
+  # aspect SOUTH: -0.003642 ± 0.012884, p = 0.77948 (not significant)
+  # grazing NORTH: -0.010821 ± 0.009195, p = 0.24917 (not significant)
+  # grazing*aspect SOUTH: 0.031877 ± 0.013407, p = 0.02449 (SIGNIFICANT)
+  # wetness NORTH: 0.054734 ± 0.017524, p = 0.00413 (SIGNIFICANT)
+  # wetness*aspect SOUTH: -0.039613 ± 0.019200, p = 0.04848 (SIGNIFICANT)
+# adjusted R2 = 0.3075
 
+## Interpreting my model
+# grazing N
+-0.010821/sd(grass$grazing_m)  # = -0.001284576
+# grazing S
+0.031877/sd(grass$grazing_m)  # = 0.003784163
+# wetness N
+0.054734/sd(grass$wetness)    # = 0.003086376
+# wetness S
+-0.039613/sd(grass$wetness)    # = -0.002233724
 
-# HERB = lm(rich_propT ~ grazing_m + wetness_s + slope_deg_s)
-summary(hgws)      ## USE THIS MODEL'S RESULTS ##
-  # intercept: 0.1497099 ± 0.0148025
-  # grazing: -0.0001041 ± 0.0011310, p = 0.92733 (not significant)
-  # wetness_s: 0.0352230 ± 0.0111927, p = 0.00389 (SIGNIFICANT)
-  # slope_s: -0.0038474 ± 0.0103279, p = 0.71231 (not significant)
-# adjusted R2 = 0.3007
+# comparing to OG model (not scaled)
+ggaw4_og <- lm(rich_propT ~ grazing_m*aspect + wetness*aspect, data = grass)
+summary(ggaw4_og)
+  # grazing N = -0.0012792
+  # grazing S = 0.0037685
+  # wetness N = 0.0029648
+  # wetness S = -0.0021458
+# very similar 
+
+# HERB = lm(rich_propT ~ grazing_m_s + aspect + wetness_s)
+summary(hgaw)      ## USE THIS MODEL'S RESULTS ##
+  # aspect NORTH (intercept): 0.162522 ± 0.011884
+  # aspect SOUTH: -0.030283 ± 0.017697, p = 0.098100 (not significant)
+  # grazing: 0.001077 ± 0.009160, p = 0.907262 (not significant)
+  # wetness_s: 0.040812 ± 0.009536, p = 0.000198 (SIGNIFICANT)
+# adjusted R2 = 0.3639
+
+## Interpreting my model
+# grazing 
+0.001077/sd(herb$grazing_m)  # = 0.0001265944
+# wetness 
+0.040812/sd(herb$wetness)    # = 0.002248992
+
+# comparing to OG model (not scaled)
+hgaw_og <- lm(rich_propT ~ grazing_m + aspect + wetness, data = herb)
+summary(hgaw_og)
+  # grazing = 0.0001273
+  # wetness = 0.0022107
+# very similar 
 
 
 # . ----
@@ -1310,21 +1400,41 @@ gs_glm <- glm(grazing_m ~ slope_deg, family = Gamma(link = "log"), data = plot_g
 gsa_glm <- glm(grazing_m ~ slope_deg + aspect, family = Gamma(link = "log"), data = plot_grazing)
 gsa_glm2 <- glm(grazing_m ~ slope_deg*aspect, family = Gamma(link = "log"), data = plot_grazing)
 
+# soil depth
+gd_glm <- glm(grazing_m ~ soil_depth, family = Gamma(link = "log"), data = plot_grazing)
+gda_glm <- glm(grazing_m ~ soil_depth + aspect, family = Gamma(link = "log"), data = plot_grazing)
+gda_glm2 <- glm(grazing_m ~ soil_depth*aspect, family = Gamma(link = "log"), data = plot_grazing)
+
+
 min(AIC(gw_glm, gw_glm2, gwa_glm, gwa_glm2, gn_glm, gna_glm, gna_glm2, gs_glm, gsa_glm, 
-        gsa_glm2)[,2])  # lowest = 670.6974
-AIC(gw_glm, gw_glm2, gwa_glm, gwa_glm2, gn_glm, gna_glm, gna_glm2, gs_glm, gsa_glm, gsa_glm2)
+        gsa_glm2, gd_glm, gda_glm, gda_glm2)[,2])  # lowest = 670.6974
+AIC(gw_glm, gw_glm2, gwa_glm, gwa_glm2, gn_glm, gna_glm, gna_glm2, gs_glm, gsa_glm, gsa_glm2,
+    gd_glm, gda_glm, gda_glm2)
   # 'gw_glm2' is lowest 
 
 ### Multiple variables
+# 2-3 variables
 gwn_glm <- glm(grazing_m ~ wetness_s + ndvi_s, family = Gamma(link = "log"), data = plot_grazing)
 gws_glm <- glm(grazing_m ~ wetness_s + slope_deg_s, family = Gamma(link = "log"), data = plot_grazing)
+gwd_glm <- glm(grazing_m ~ wetness_s + soil_depth_s, family = Gamma(link = "log"), data = plot_grazing)
 gwns_glm <- glm(grazing_m ~ wetness_s + ndvi_s + slope_deg_s, family = Gamma(link = "log"), 
                 data = plot_grazing)
+gwnd_glm <- glm(grazing_m ~ wetness_s + ndvi_s + soil_depth_s, family = Gamma(link = "log"), 
+                data = plot_grazing)
+gwsd_glm <- glm(grazing_m ~ wetness_s + soil_depth_s + slope_deg_s, family = Gamma(link = "log"), 
+                data = plot_grazing)
 
+gwn_glm2 <- glm(grazing_m ~ wetness_s*ndvi_s, family = Gamma(link = "log"), data = plot_grazing)
+gws_glm2 <- glm(grazing_m ~ wetness_s*slope_deg_s, family = Gamma(link = "log"), data = plot_grazing)
+
+
+# with aspect 
 gwna_glm <- glm(grazing_m ~ wetness_s + ndvi_s + aspect, family = Gamma(link = "log"), 
                 data = plot_grazing)
-gwna_glm2 <- glm(grazing_m ~ wetness_s + ndvi_s*aspect, family = Gamma(link = "log"), data = plot_grazing)
-gwna_glm3 <- glm(grazing_m ~ wetness_s*aspect + ndvi_s, family = Gamma(link = "log"), data = plot_grazing)
+gwna_glm2 <- glm(grazing_m ~ wetness_s + ndvi_s*aspect, family = Gamma(link = "log"), 
+                 data = plot_grazing)
+gwna_glm3 <- glm(grazing_m ~ wetness_s*aspect + ndvi_s, family = Gamma(link = "log"), 
+                 data = plot_grazing)
 gwna_glm4 <- glm(grazing_m ~ wetness_s*aspect + ndvi_s*aspect, family = Gamma(link = "log"), 
                  data = plot_grazing)
 
@@ -1356,12 +1466,12 @@ gwnsa_glm8 <- glm(grazing_m ~ wetness_s*aspect + ndvi_s*aspect + slope_deg_s*asp
 
 
 min(AIC(gw_glm2, gwn_glm, gws_glm, gwns_glm, gwna_glm, gwna_glm2, gwna_glm3, gwna_glm4,
-        gwsa_glm, gwsa_glm2, gwsa_glm3, gwsa_glm4, gwnsa_glm, gwnsa_glm2, gwnsa_glm3,
-        gwnsa_glm4, gwnsa_glm5, gwnsa_glm6, gwnsa_glm7, gwnsa_glm8)[,2])  
+        gwn_glm2, gws_glm2, gwsa_glm, gwsa_glm2, gwsa_glm3, gwsa_glm4, gwnsa_glm, gwnsa_glm2, 
+        gwnsa_glm3, gwnsa_glm4, gwnsa_glm5, gwnsa_glm6, gwnsa_glm7, gwnsa_glm8)[,2])  
   # lowest = 670.6974
-AIC(gw_glm2, gwn_glm, gws_glm, gwns_glm, gwna_glm, gwna_glm2, gwna_glm3, gwna_glm4, 
-    gwsa_glm, gwsa_glm2, gwsa_glm3, gwsa_glm4, gwnsa_glm, gwnsa_glm2, gwnsa_glm3, gwnsa_glm4,
-    gwnsa_glm5, gwnsa_glm6, gwnsa_glm7, gwnsa_glm8)
+AIC(gw_glm2, gwn_glm, gws_glm, gwns_glm, gwna_glm, gwna_glm2, gwna_glm3, gwna_glm4,
+    gwn_glm2, gws_glm2, gwsa_glm, gwsa_glm2, gwsa_glm3, gwsa_glm4, gwnsa_glm, gwnsa_glm2, 
+    gwnsa_glm3, gwnsa_glm4, gwnsa_glm5, gwnsa_glm6, gwnsa_glm7, gwnsa_glm8)
   # 'gw_glm2' is best (wetness only, family = Gamma)
 
 # null model
@@ -1369,13 +1479,51 @@ graze_null <- glm(grazing_m ~ 1, family = Gamma(link = "log"), data = plot_grazi
 AIC(graze_null, gw_glm2)  # better than the null
 
 
+## Landscape Model Results ## ----
 summary(gw_glm2)   ## USE THIS MODEL'S RESULTS ###
   # intercept = exp(2.553538) ± exp(0.104194)
   # wetness (NOT STANDARDIZED): exp(-0.020337) ± exp(0.004487), p = 1.62e-05
 
+# calculating McFadden's R2 
+with(summary(gw_glm2), 1 - deviance/null.deviance)  # R2 = 0.09118
 
 # . ----
 #### Other Basic Statistics ----
+aspect <- sites %>% dplyr::select(plot_nr, aspect)
+gisvar <- left_join(gisvar, aspect)
+
+### Wetness ~ Aspect
+t.test(wetness ~ aspect, data = gisvar)
+  # t = -1.5389, df = 69.931, p-value = 0.1283
+  # N = 11.41176, S = 17.00000 
+
+# range
+summary(ifelse(richness_site2$aspect == "N", richness_site2$wetness, NA))
+  # min = 0.93, max = 38.33, mean = 11.42 
+summary(ifelse(richness_site2$aspect == "S", richness_site2$wetness, NA))
+  # min = 0.00, max = 88.08, mean = 17.05
+
+
+### Slope angle ~ Aspect
+t.test(slope_deg ~ aspect, data = gisvar)
+  # t = -1.7695, df = 59.86, p-value = 0.0819
+  # N = 5.543193, S = 7.058317 
+
+# range
+summary(ifelse(richness_site2$aspect == "N", richness_site2$slope_deg, NA))
+  # min = 1.682, max = 8.354, mean = 5.542 
+summary(ifelse(richness_site2$aspect == "S", richness_site2$slope_deg, NA))
+  # min = 1.278, max = 20.671, mean = 7.058 
+
+### NDVI ~ Aspect
+t.test(ndvi ~ aspect, data = gisvar)
+  # t = -1.9925, df = 99.937, p-value = 0.04904
+  # N = 0.09076183, S = 0.11356689 
+
+summary(ifelse(richness_site2$aspect == "N", richness_site2$ndvi, NA))
+summary(ifelse(richness_site2$aspect == "S", richness_site2$ndvi, NA))
+
+
 ### Richness ~ Aspect
 ra1 <- lm(richness_siteT ~ aspect, data = richness_site2)
 shapiro.test(resid(ra1))  # normal 
@@ -1383,12 +1531,6 @@ shapiro.test(resid(ra1))  # normal
 t.test(richness_siteT ~ aspect, data = richness_site2)
   # t = 2.4577, DF = 31.866, p = 0.01961
   # N = 17.07, S = 14.73
-
-# average height S vs. N
-richness_site2 %>% group_by(aspect) %>% summarise(rich = mean(richness_siteT),
-                                                  se = std.error(richness_siteT))
-  # N = 17.1 ± 0.651
-  # S = 14.7 ± 0.694
 
 
 ### Richness Proportion ~ Sp Group
@@ -1415,104 +1557,160 @@ TukeyHSD(prop_aov)
   # shrub-lichen -0.046470440 -0.090331580 -0.00260930 0.0319417
   # shrub-moss    0.077188689  0.033327549  0.12104983 0.0000275
 
+richness_site %>% group_by(sp_group) %>% summarize(prop = mean(rich_propT),
+                                                   se = std.error(rich_propT))
+  # grass: 0.149 ± 0.00752
+  # herb: 0.149 ± 0.0108 
+  # lichen: 0.300 ± 0.0135 
+  # moss: 0.180 ± 0.00838
+  # shrub: 0.251 ± 0.0108 
 
-### Height ~ Aspect
-ha1 <- lm(height_site ~ aspect, data = richness_site)
-shapiro.test(resid(ha1))  # not normal 
+## N vs. S proportions per group
+# lichen
+t.test(rich_propT ~ aspect, data = lichen)  
+  # t = -0.24378, df = 31.984, p-value = 0.809
 
-wilcox.test(height_site ~ aspect, data = richness_site)
-  # W = 3233, p = 0.3507 (no difference in height between N and S)
+# shrub
+t.test(rich_propT ~ aspect, data = shrub)  
+  # t = -1.6986, df = 27.656, p-value = 0.1006
 
-# average height S vs. N
-richness_site %>% group_by(aspect) %>% summarise(height = mean(height_site),
-                                                 se = std.error(height_site))
-  # N = 3.39cm ± 0.168
-  # S = 4.27cm ± 0.286
+# grass
+t.test(rich_propT ~ aspect, data = grass)  
+  # t = -0.47806, df = 31.857, p-value = 0.6359
 
-
-### Coverage ~ Sp Group + Aspect
-cov_lm <- lm(coverage_perc ~ sp_group, data = coverage_site)
-shapiro.test(resid(cov_lm))  # not normal
-
-# coverage ~ group (overall)
-kruskal.test(coverage_perc ~ sp_group, data = coverage_site)
-  # chi-squared = 117.78, df = 4, p = < 2.2e-16 (SIGNIFICANT)
-
-dunn.test::dunn.test(coverage_site$coverage_perc, coverage_site$sp_group, list = F, altp = T)
-# diff = COLUMN minus ROW 
-  # grass-herb: diff = 2.8212, p = 0.0048 (SIGNIFICANT)
-  # grass-lichen: diff = -3.9275, p = 0.0001 (SIGNIFICANT)
-  # grass-moss: diff = -2.1323, p = 0.0330 (SIGNIFICANT)
-  # grass-shrub: diff = -7.3885, p = 0.0000 (SIGNIFICANT)
-  # herb-lichen: diff = -6.6886, p = 0.0000 (SIGNIFICANT)
-  # herb-moss: diff = -4.90089, p = 0.0000 (SIGNIFICANT)
-  # herb-shrub: diff = -10.0968, p = 0.0000 (SIGNIFICANT)
-  # lichen-moss: diff = 1.76574, p = 0.0774 (not significant)
-  # lichen-shrub: diff = -3.461, p = 0.0005 (SIGNIFICANT)
-  # moss-shrub: diff = -5.2008, p = 0.0000 (SIGNIFICANT)
-
-# coverage ~ group (NORTH)
-coverageN <- coverage_site %>% filter(aspect == "N")
-kruskal.test(coverage_perc ~ sp_group, data = coverageN)
-# chi-squared = 61.961, df = 4, p = 1.122e-12 (SIGNIFICANT)
-
-dunn.test::dunn.test(coverageN$coverage_perc, coverageN$sp_group, list = F, altp = T)
-# diff = COLUMN minus ROW 
-  # grass-herb: diff = 2.140144, p = 0.0323 (SIGNIFICANT)
-  # grass-lichen: diff = -2.682129, p = 0.0073 (SIGNIFICANT)
-  # herb-lichen: diff = -4.822274, p = 0.0000 (SIGNIFICANT)
-  # grass-moss: diff = -2.022020, p = 0.0432 (SIGNIFICANT)
-  # herb-moss: diff = -4.162165, p = 0.0000 (SIGNIFICANT)
-  # lichen-moss: diff = 0.660109, p = 0.5092 (not significant)
-  # grass-shrub: diff = -5.218340, p = 0.0000 (SIGNIFICANT)
-  # herb-shrub: diff = -7.358485, p = 0.0000 (SIGNIFICANT)
-  # lichen-shrub: diff = -2.536210, p = 0.0112 (SIGNIFICANT)
-  # moss-shrub: diff = -3.196320, p = 0.0014 (SIGNIFICANT)
-
-# coverage ~ group (SOUTH)
-coverageS <- coverage_site %>% filter(aspect == "S")
-kruskal.test(coverage_perc ~ sp_group, data = coverageS)
-# chi-squared = 55.836, df = 4, p = 2.17e-11 (SIGNIFICANT)
-
-dunn.test::dunn.test(coverageS$coverage_perc, coverageS$sp_group, list = F, altp = T)
-# diff = COLUMN minus ROW 
-  # grass-herb: diff = 1.861202, p = 0.0627 (not significant)
-  # grass-lichen: diff = -2.822872, p = 0.0048 (SIGNIFICANT)
-  # herb-lichen: diff = -4.594437, p = 0.0000 (SIGNIFICANT)
-  # grass-moss: diff = -1.003856, p = 0.3154 (not significant)
-  # herb-moss: diff = -2.807424, p = 0.0050 (SIGNIFICANT)
-  # lichen-moss: diff = 1.775916, p = 0.0757 (not significant)
-  # grass-shrub: diff = -5.156062, p = 0.0000 (SIGNIFICANT)
-  # herb-shrub: diff = -6.853539, p = 0.0000 (SIGNIFICANT)
-  # lichen-shrub: diff = -2.333190, p = 0.0196 (SIGNIFICANT)
-  # moss-shrub: diff = -4.073483, p = 0.0000 (SIGNIFICANT)
-
-
-# shrub ~ aspect
-s <- coverage_site %>% filter(sp_group == "shrub")
-wilcox.test(coverage_perc ~ aspect, data = s)
-  # W = 116, p = 0.3394
-
-# lichen ~ aspect
-l <- coverage_site %>% filter(sp_group == "lichen")
-wilcox.test(coverage_perc ~ aspect, data = l)
-  # W = 139, p = 0.8651
-
-# moss ~ aspect
-m <- coverage_site %>% filter(sp_group == "moss")
-wilcox.test(coverage_perc ~ aspect, data = m)
-  # W = 199, p = 0.02291 (SIGNIFICANT)
-
-# grass ~ aspect
-g <- coverage_site %>% filter(sp_group == "grass")
-wilcox.test(coverage_perc ~ aspect, data = g)
-  # W = 159, p = 0.6339
+# moss
+t.test(rich_propT ~ aspect, data = moss)  
+  # t = 1.5857, df = 30.661, p-value = 0.1231
 
 # herb
-h <- coverage_site %>% filter(sp_group == "herb")
-wilcox.test(coverage_perc ~ aspect, data = h)
-  # W = 154, p = 0.331 
+t.test(rich_propT ~ aspect, data = herb)  
+  # t = 0.66431, df = 26.431, p-value = 0.5122
 
+
+### Coverage ~ Sp Group
+cov_lm <- lm(coverage_perc ~ sp_group, data = coverage_site)
+shapiro.test(resid(cov_lm))  # not normal, use transformed model 
+
+cov_lm2 <- lm(sqrt(coverage_perc) ~ sp_group, data = coverage_site)
+shapiro.test(resid(cov_lm2))  # almost normal but not quite
+
+cov_lm3 <- lm(log(coverage_perc) ~ sp_group, data = coverage_site)
+shapiro.test(resid(cov_lm3))  # not normal
+
+# using non-parametric test instead
+cov_kruskal <- kruskal.test(coverage_perc ~ sp_group, data = coverage_site)
+cov_kruskal
+  # p = < 2.2e-16, Kruskal-Wallis chi-squared = 117.78, DF = 4 
+
+pairwise.wilcox.test(coverage_site$coverage_perc, coverage_site$sp_group)
+  #        grass    herb     lichen  moss   
+  # herb   7.8e-06  -        -        -      
+  # lichen 1.7e-06  2.3e-14  -        -      
+  # moss   0.0015   2.6e-12  0.0056   -      
+  # shrub  3.2e-16  < 2e-16  7.0e-08  6.5e-15
+
+
+# average coverage per group
+coverage_site %>% group_by(sp_group) %>% summarize(cov = mean(coverage_perc),
+                                                   se = std.error(coverage_perc))
+  # grass: 6.73 ± 1.44
+  # herb: 1.58 ± 0.340 
+  # lichen: 23.7 ± 3.29 
+  # moss: 11.5 ± 1.56
+  # shrub: 57.0 ± 3.51 
+
+
+## N vs. S coverage per group
+# lichen
+lichen_cov <- coverage_site %>% filter(sp_group == "lichen")
+wilcox.test(coverage_perc ~ aspect, data = lichen_cov)  
+# W = 139, p-value = 0.8651
+
+# shrub
+shrub_cov <- coverage_site %>% filter(sp_group == "shrub")
+wilcox.test(coverage_perc ~ aspect, data = shrub_cov)  
+# W = 116, p-value = 0.3394
+
+# grass
+grass_cov <- coverage_site %>% filter(sp_group == "grass")
+wilcox.test(coverage_perc ~ aspect, data = grass_cov)  
+# W = 159, p-value = 0.6339
+
+# moss
+moss_cov <- coverage_site %>% filter(sp_group == "moss")
+wilcox.test(coverage_perc ~ aspect, data = moss_cov)  
+# W = 199, p-value = 0.02291
+
+# herb
+herb_cov <- coverage_site %>% filter(sp_group == "herb")
+wilcox.test(coverage_perc ~ aspect, data = herb_cov)  
+# W = 154, p-value = 0.331
+
+
+# average coverage per group by aspect
+coverage_site %>% group_by(aspect, sp_group) %>% summarize(cov = mean(coverage_perc),
+                                                           se = std.error(coverage_perc))
+# grass: N = 7.36, S = 6.11
+# herb: N = 1.49, S = 1.69
+# lichen: N = 24.3, S = 23.1
+# moss: N = 12.8, S = 10.1
+# shrub: N = 54.2, S = 59.9
+
+?summarize
+
+### Summary of species 
+## How many were found
+rich_sum <- plots %>% 
+              group_by(sp_group) %>% 
+              summarize(richness = length(unique(sp_latin)))
+rich_sum
+  # moss = 10, grass = 14, shrub = 15, lichen = 20, herb = 28
+
+sum(rich_sum$richness)  # found 87 species in total 
+
+plots %>% 
+  group_by(aspect) %>% 
+  summarize(richness = length(unique(sp_latin)))
+
+# S = 70, N = 61 
+
+# on average per site
+richness_site %>% 
+  group_by(sp_group) %>% 
+  summarize(richness = mean(richness_group),
+            se = std.error(richness_group))
+  # grass: 2.41 ± 0.174
+  # herb: 2.56 ± 0.240
+  # lichen: 4.63 ± 0.166
+  # moss: 2.85 ± 0.168
+  # shrub: 3.90 ± 0.161
+
+richness_site %>% 
+  group_by(aspect) %>% 
+  summarize(richness = mean(richness_siteT),
+            se = std.error(richness_siteT))
+
+# N = 17.1 ± 0.284
+# S = 14.7 ± 0.310
+
+                              
+## What was most prominent 
+plots %>% group_by(sp_latin) %>% summarize(most = length(sp_latin)) %>% arrange(desc(most))
+
+aspect <- sites %>% dplyr::select(plot_nr, aspect)
+plots <- left_join(plots, aspect)
+
+latin_sum <- plots %>% 
+                group_by(sp_latin, aspect) %>% 
+                summarize(most = length(sp_latin)) %>% 
+                pivot_wider(names_from = "aspect", values_from = "most") 
+
+# top 5 for S-slopes:
+  # Cladonia rangiferina, Dicranum scoparium, Empetrum nigrum ssp. hermaphroditum,
+  # Vaccinium vitis-idaea, Juncus trifidus
+# top 5 for N-slopes:
+  # Cladonia rangiferina, Dicranum scoparium, Vaccinium vitis-idaea, Cladonia bellidiflora,
+  # Polytrichum hyperboreum
 
 # . ----
 #### NMDS Relative Abundance ----
@@ -1575,8 +1773,7 @@ scree <- cbind(rbind(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
 plot(scree)
 # ~6 or more dimensions = <0.1 stress (which is good)
 
-stressplot(mds6b)   # non-metric fit = 0.994, linear fit = 0.934
-stressplot(mds7b)   # non-metric fit = 0.996, linear fit = 0.949
+stressplot(mds6b)   # non-metric fit = 0.994, linear fit = 0.934stressplot(mds7b)   # non-metric fit = 0.996, linear fit = 0.949
 stressplot(mds8b)   # non-metric fit = 0.997, linear fit = 0.959
 stressplot(mds9b)   # non-metric fit = 0.998, linear fit = 0.967
 
@@ -1588,7 +1785,7 @@ set.seed(7)
 nmds7 <- metaMDS(sp_matrix4, distance = "bray", k = 7, autotransform = F, trymax = 500, 
                  sratmax = 0.99999)  
 # note that autotransformation is off (default = T) 
-
+?metaMDS
 nmds7
 # stress = ~0.06575
 # 7 dimensions 
@@ -1646,14 +1843,43 @@ gisfit2
 ### For Plots 
 ## Not standardized 
 gisvar_plots <- gisvar_long %>%  
-                  dplyr::select(ndvi, slope_deg, wetness, soil_depth)
+                  dplyr::select(ndvi, slope_deg, wetness, soil_depth, grazing_m)
 
 gisfit3 <- envfit(nmds7, gisvar_plots, permu = 999)
 gisfit3   
   # ndvi: R2 = 0.2254, p = 0.001 (SIGNIFICANT)
   # slope: R2 = 0.2180, p = 0.001 (SIGNIFICANT)
   # wetness: R2 = 0.1994, p = 0.001 (SIGNIFICANT) 
-  # soil depth: R2 = 0.0073, p = 0.713  
+  # soil depth: R2 = 0.0073, p = 0.684
+  # grazing: R2 = 0.0037, p = 0.824
+
+# splitting by aspect
+sp_matrixN <- sp_matrix3 %>%   # could go back and rename objects if no site-level NMDS anymore
+                filter(aspect == "N") %>% 
+                dplyr::select(!c(aspect, site_nr, plot_nr, plot_rep))
+sp_matrixS <- sp_matrix3 %>%   
+                filter(aspect == "S") %>% 
+                dplyr::select(!c(aspect, site_nr, plot_nr, plot_rep))
+
+set.seed(7)
+nmds7N <- metaMDS(sp_matrixN, distance = "bray", k = 7, autotransform = F, trymax = 500, 
+                  sratmax = 0.99999)  
+nmds7S <- metaMDS(sp_matrixS, distance = "bray", k = 7, autotransform = F, trymax = 500, 
+                  sratmax = 0.99999)  
+
+gisvarN <- gisvar_long %>%  
+              filter(aspect == "N") %>% 
+              dplyr::select(ndvi, slope_deg, wetness, soil_depth, grazing_m)
+gisvarS <- gisvar_long %>%  
+            filter(aspect == "S") %>% 
+            dplyr::select(ndvi, slope_deg, wetness, soil_depth, grazing_m)
+
+gisfitN <- envfit(nmds7N, gisvarN, permu = 999)
+gisfitN
+
+gisfitS <- envfit(nmds7S, gisvarS, permu = 999)
+gisfitS
+
 
 ## Standardized variables 
 gisvar_plots2 <- gisvar_long %>%  
@@ -1679,10 +1905,21 @@ plot(nmds6, type = "t", display = "sites")
 plot(gisfit2, p.max = 0.05, col = "red")
 dev.off()
 
+
 ### Plot
 plot(nmds7, type = "t", display = "sites") 
-plot(gisfit2, p.max = 0.05, col = "red")
+plot(gisfit, p.max = 0.05, col = "red")
 dev.off()
+
+# north
+plot(nmds7N, type = "t", display = "sites") 
+plot(gisfitN, p.max = 0.05, col = "red")
+dev.off()
+
+plot(nmds7S, type = "t", display = "sites") 
+plot(gisfitS, p.max = 0.05, col = "red")
+dev.off()
+
 
 ### GIS ~ Sp 
 gisvar_plots <- gisvar_plots %>% 
@@ -1746,19 +1983,6 @@ dev.off()
 ano_sp <- anosim(sp_matrix2, sp_matrix$aspect, distance = "bray", permutations = 9999)
 ano_sp
   # ANOSIM R = 0.04279, p = 0.1118 (not significant)
-
-## Rel abundance ~ grazing category 
-# making grazing categories for sites instead of plots 
-grazecat <- sites %>% 
-              mutate(grazing_cat2 = as.numeric(grazing_cat2)) %>% 
-              group_by(site_nr) %>% 
-              summarize(grazecat = mean(grazing_cat2)) %>% 
-              mutate(grazecat = round(grazecat)) %>% 
-              mutate(grazecat = as.character(grazecat))
-
-ano_g <- anosim(sp_matrix2, grazecat$grazecat, distance = "bray", permutations = 9999)
-ano_g 
-  # no difference 
 
 ### By Plot
 ## Rel abundance ~ aspect 
@@ -2261,6 +2485,104 @@ with(summary(cga_glm), 1 - deviance/null.deviance)  # R2 = 0.6819 (very good mod
 plot(residuals(cga_glm) ~ predict(cga_glm, type = "response"))  # a pattern, but due to sp. groups
 
 
+
+#### Basic Statistics ----
+### Height ~ Aspect
+ha1 <- lm(height_site ~ aspect, data = richness_site)
+shapiro.test(resid(ha1))  # not normal 
+
+wilcox.test(height_site ~ aspect, data = richness_site)
+# W = 3233, p = 0.3507 (no difference in height between N and S)
+
+# average height S vs. N
+richness_site %>% group_by(aspect) %>% summarise(height = mean(height_site),
+                                                 se = std.error(height_site))
+# N = 3.39cm ± 0.168
+# S = 4.27cm ± 0.286
+
+
+### Coverage ~ Sp Group + Aspect
+cov_lm <- lm(coverage_perc ~ sp_group, data = coverage_site)
+shapiro.test(resid(cov_lm))  # not normal
+
+# coverage ~ group (overall)
+kruskal.test(coverage_perc ~ sp_group, data = coverage_site)
+# chi-squared = 117.78, df = 4, p = < 2.2e-16 (SIGNIFICANT)
+
+dunn.test::dunn.test(coverage_site$coverage_perc, coverage_site$sp_group, list = F, altp = T)
+# diff = COLUMN minus ROW 
+# grass-herb: diff = 2.8212, p = 0.0048 (SIGNIFICANT)
+# grass-lichen: diff = -3.9275, p = 0.0001 (SIGNIFICANT)
+# grass-moss: diff = -2.1323, p = 0.0330 (SIGNIFICANT)
+# grass-shrub: diff = -7.3885, p = 0.0000 (SIGNIFICANT)
+# herb-lichen: diff = -6.6886, p = 0.0000 (SIGNIFICANT)
+# herb-moss: diff = -4.90089, p = 0.0000 (SIGNIFICANT)
+# herb-shrub: diff = -10.0968, p = 0.0000 (SIGNIFICANT)
+# lichen-moss: diff = 1.76574, p = 0.0774 (not significant)
+# lichen-shrub: diff = -3.461, p = 0.0005 (SIGNIFICANT)
+# moss-shrub: diff = -5.2008, p = 0.0000 (SIGNIFICANT)
+
+# coverage ~ group (NORTH)
+coverageN <- coverage_site %>% filter(aspect == "N")
+kruskal.test(coverage_perc ~ sp_group, data = coverageN)
+# chi-squared = 61.961, df = 4, p = 1.122e-12 (SIGNIFICANT)
+
+dunn.test::dunn.test(coverageN$coverage_perc, coverageN$sp_group, list = F, altp = T)
+# diff = COLUMN minus ROW 
+# grass-herb: diff = 2.140144, p = 0.0323 (SIGNIFICANT)
+# grass-lichen: diff = -2.682129, p = 0.0073 (SIGNIFICANT)
+# herb-lichen: diff = -4.822274, p = 0.0000 (SIGNIFICANT)
+# grass-moss: diff = -2.022020, p = 0.0432 (SIGNIFICANT)
+# herb-moss: diff = -4.162165, p = 0.0000 (SIGNIFICANT)
+# lichen-moss: diff = 0.660109, p = 0.5092 (not significant)
+# grass-shrub: diff = -5.218340, p = 0.0000 (SIGNIFICANT)
+# herb-shrub: diff = -7.358485, p = 0.0000 (SIGNIFICANT)
+# lichen-shrub: diff = -2.536210, p = 0.0112 (SIGNIFICANT)
+# moss-shrub: diff = -3.196320, p = 0.0014 (SIGNIFICANT)
+
+# coverage ~ group (SOUTH)
+coverageS <- coverage_site %>% filter(aspect == "S")
+kruskal.test(coverage_perc ~ sp_group, data = coverageS)
+# chi-squared = 55.836, df = 4, p = 2.17e-11 (SIGNIFICANT)
+
+dunn.test::dunn.test(coverageS$coverage_perc, coverageS$sp_group, list = F, altp = T)
+# diff = COLUMN minus ROW 
+# grass-herb: diff = 1.861202, p = 0.0627 (not significant)
+# grass-lichen: diff = -2.822872, p = 0.0048 (SIGNIFICANT)
+# herb-lichen: diff = -4.594437, p = 0.0000 (SIGNIFICANT)
+# grass-moss: diff = -1.003856, p = 0.3154 (not significant)
+# herb-moss: diff = -2.807424, p = 0.0050 (SIGNIFICANT)
+# lichen-moss: diff = 1.775916, p = 0.0757 (not significant)
+# grass-shrub: diff = -5.156062, p = 0.0000 (SIGNIFICANT)
+# herb-shrub: diff = -6.853539, p = 0.0000 (SIGNIFICANT)
+# lichen-shrub: diff = -2.333190, p = 0.0196 (SIGNIFICANT)
+# moss-shrub: diff = -4.073483, p = 0.0000 (SIGNIFICANT)
+
+
+# shrub ~ aspect
+s <- coverage_site %>% filter(sp_group == "shrub")
+wilcox.test(coverage_perc ~ aspect, data = s)
+# W = 116, p = 0.3394
+
+# lichen ~ aspect
+l <- coverage_site %>% filter(sp_group == "lichen")
+wilcox.test(coverage_perc ~ aspect, data = l)
+# W = 139, p = 0.8651
+
+# moss ~ aspect
+m <- coverage_site %>% filter(sp_group == "moss")
+wilcox.test(coverage_perc ~ aspect, data = m)
+# W = 199, p = 0.02291 (SIGNIFICANT)
+
+# grass ~ aspect
+g <- coverage_site %>% filter(sp_group == "grass")
+wilcox.test(coverage_perc ~ aspect, data = g)
+# W = 159, p = 0.6339
+
+# herb
+h <- coverage_site %>% filter(sp_group == "herb")
+wilcox.test(coverage_perc ~ aspect, data = h)
+# W = 154, p = 0.331 
 
 #### NMDS (Coverage by Group) ----
 ### Making a matrix
