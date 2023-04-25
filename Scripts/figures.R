@@ -92,6 +92,18 @@ print(coverage %>% group_by(plot_nr, sp_group) %>% summarise(l = length(sp_group
 
 unique(plots$sp_group)
 
+# checking if groups match the names (no incorrect groups)
+names <- plots %>% 
+            group_by(sp_latin) %>% 
+            summarize(sp_latin = unique(sp_latin),
+                      sp_group = sp_group) %>% 
+            distinct()    # Antennaria alpina = herb and shrub, should only be herb 
+                          # Polytrichum hyperboreum = moss and lichen, should be moss
+                          # Lysimachia europaea = shrub and herb, should be herb
+                          # Lycopodium annotinum = herb and moss, should be herb 
+                          # Cladonia rangiferina = moss and lichen, should be lichen 
+
+
 ### Editing species that had mistakes 
 plots <- plots %>% 
             mutate(sp_common = ifelse(sp_common == "purple mountain-heath", 
@@ -112,7 +124,12 @@ plots <- plots %>%
                    sp_latin = ifelse(sp_latin == "Vaxinium uliginosum", "Vaccinium uliginosum",
                                      sp_latin),
                    sp_latin = ifelse(sp_latin == "Pilocello sp.", "Pilosella sp.", sp_latin),
-                   sp_latin = ifelse(sp_latin == "Pilocella sp.", "Pilosella sp.", sp_latin))
+                   sp_latin = ifelse(sp_latin == "Pilocella sp.", "Pilosella sp.", sp_latin)) %>% 
+            mutate(sp_group = ifelse(sp_latin == "Antennaria alpina", "herb", sp_group),
+                   sp_group = ifelse(sp_latin == "Polytrichum hyperboreum", "moss", sp_group),
+                   sp_group = ifelse(sp_latin == "Lysimachia europaea", "herb", sp_group),
+                   sp_group = ifelse(sp_latin == "Lycopodium annotinum", "herb", sp_group),
+                   sp_group = ifelse(sp_latin == "Cladonia rangiferina", "lichen", sp_group))
 
 plots[(plots$sp_latin == ""), ]   # no latin name because they are "unknown"
 plots <- plots %>%  
@@ -268,10 +285,10 @@ rich_sum <- plots %>%
               group_by(sp_group) %>% 
               summarize(richness = length(unique(sp_latin))) %>% 
               mutate(sp_group = factor(sp_group, 
-                                       levels = c("moss", "grass", "shrub", "lichen", "herb"),
-                                       labels = c("Bryophytes", "Graminoids", "Shrubs", "Lichens",
+                                       levels = c("moss", "shrub", "grass", "lichen", "herb"),
+                                       labels = c("Bryophytes", "Shrubs", "Graminoids", "Lichens",
                                                   "Forbs"))) %>% 
-              arrange(richness)
+              arrange(desc(richness))
 
 (pie_plot <- ggplot(rich_sum, aes(x = "", y = richness, fill = sp_group)) +
                 geom_bar(stat = "identity", width = 1, color = "white") +
@@ -284,7 +301,7 @@ rich_sum <- plots %>%
                       axis.ticks = element_blank()) +   
                 geom_text(aes(label = paste(round(richness))), 
                               position = position_stack(vjust = 0.5), color = "white") +
-                scale_fill_manual(values = c("#73A6E7", "#3A69B4", "#867441", "#BFBF88", "#524B49"),
+                scale_fill_manual(values = c("#73A6E7", "#867441", "#3A69B4", "#BFBF88", "#524B49"),
                                   name = "Species Group"))
 
 ggsave("Figures/piechart.png", plot = pie_plot, width = 5, height = 5, units = "in")
@@ -296,7 +313,7 @@ ggsave("Figures/piechart.png", plot = pie_plot, width = 5, height = 5, units = "
 rgawn_og <- lm(richness_siteT ~ grazing_m + aspect + wetness + ndvi, richness_site2)
   # use this model instead of actual final due to similar outputs in the correct scale 
 
-## Richness per site ~ grazing 
+## Richness per site ~ grazing ----
 # extracting model predictions for plotting
 rgawn_graze <- ggpredict(rgawn_og, terms = c("grazing_m", "aspect")) %>% 
                   rename(aspect = group)
@@ -323,7 +340,7 @@ rich_graze_data <- left_join(richness_site2, rgawn_graze)
                                   labels = c("North", "South"),
                                   name = "Aspect"))
 
-## Richness per site ~ NDVI
+## Richness per site ~ NDVI ----
 # extracting model predictions for plotting
 rgawn_ndvi <- ggpredict(rgawn_og, terms = c("ndvi [-0.05, 0, 0.05, 0.15, 0.25]", "aspect")) %>% 
                 rename(aspect = group)
@@ -349,11 +366,10 @@ rich_ndvi_data <- left_join(richness_site2, rgawn_ndvi)
                                     labels = c("North", "South"),
                                     name = "Aspect"))
 
-## Richness per site ~ wetness
+## Richness per site ~ wetness ----
 # extracting model predictions for plotting
 rgawn_wet <- ggpredict(rgawn_og, terms = c("wetness", "aspect")) %>% 
                 rename(aspect = group)
-?ggpredict
 rich_wet_data <- left_join(richness_site2, rgawn_wet)
 
 # the plot 
@@ -375,7 +391,7 @@ rich_wet_data <- left_join(richness_site2, rgawn_wet)
                                     labels = c("North", "South"),
                                     name = "Aspect"))
 
-## Richness per site ~ aspect (boxplot)
+## Richness per site ~ aspect (boxplot) ----
 (rich_plot4 <- ggplot(richness_site2, aes(x = aspect, y = richness_siteT)) +
                   geom_boxplot(aes(color = aspect, fill = aspect), alpha = 0.5) +
                   annotate("text", x = "N", y = 22, label = "***", fontface = 2) +
@@ -393,13 +409,13 @@ rich_wet_data <- left_join(richness_site2, rgawn_wet)
                   ylim(c(9, 23)))
 
 
-## Combined plots
+## Combined plots ----
 (rich_grid <- ggarrange(nrow = 2, heights = c(1,1),
                         ggarrange(rich_plot, NULL, widths = c(3,0.2), labels = c("A", "")),
                         ggarrange(rich_plot2, rich_plot3, legend = F, labels = c("B", "C"),
                                   widths = c(1, 1))))
 
-# with boxplot
+# with boxplot (USE THIS ONE)
 (rich_grid2 <- ggarrange(nrow = 2, heights = c(1.15,1),
                          ggarrange(rich_plot, rich_plot4, widths = c(1, 1), labels = c("A", "B"),
                                    common.legend = T),
@@ -407,11 +423,13 @@ rich_wet_data <- left_join(richness_site2, rgawn_wet)
                                    widths = c(1, 1))))
 
 
-ggsave("Figures/richness_plots.png", plot = rich_grid, width = 6, height = 5.8, unit = "in")
+# ggsave("Figures/richness_plots.png", plot = rich_grid, width = 6, height = 5.8, unit = "in")
 ggsave("Figures/richness_4figs.png", plot = rich_grid2, width = 6, height = 6.1, unit = "in")
 
 
 #### Richness Proportion Plot ----
+### Richness proportion ~ grazing ----
+## Models ----
 # lichen
 lichen <- richness_site %>% filter(sp_group == "lichen")
 lgan_log3_og <- lm(log(rich_propT) ~ grazing_m*aspect + ndvi, data = lichen)
@@ -458,6 +476,7 @@ groups <- full_join(groups, shrub_sgaw3)
 groups <- full_join(groups, grass_ggaw4)
 groups <- full_join(groups, herb_hgaw)
 
+## Plots ----
 # with only aspect facetted 
 (prop_plot <- ggplot(groups, aes(x, predicted, group = sp_group)) +
                   geom_point(aes(x = grazing_m, y = rich_propT, color = sp_group)) +
@@ -468,7 +487,7 @@ groups <- full_join(groups, herb_hgaw)
                   facet_wrap(~aspect))
 
 
-## With only sp group facetted (this is better than above)
+# with only sp group facetted (this is better than above)
 groups <- groups %>% 
             mutate(sp_group = factor(sp_group, 
                                      levels = c("grass", "lichen", "shrub", "moss", "herb"),
@@ -506,7 +525,8 @@ stripcol2 <- strip_themed(background_x = elem_list_rect(fill = c("#93AFDC", "#E2
 ggsave("Figures/sp_prop2.png", plot = prop_plot2, width = 6.5, height = 4.8, units = "in")
 
 
-### Richness proportion ~ NDVI + wetness
+### Richness proportion ~ NDVI + wetness ----
+## Models ----
 # lichen
 lgan_pred2 <- ggpredict(lgan_log3_og, terms = c("ndvi", "aspect"), back.transform = T) %>% 
                 rename(aspect = group)
@@ -514,7 +534,7 @@ lichen_lgan2 <- left_join(lichen, lgan_pred2)
 
 # moss
 mganw_pred2 <- ggpredict(mganw_og, terms = c("ndvi", "aspect")) %>% 
-                rename(aspect = group)
+                  rename(aspect = group)
 moss_mganw2 <- left_join(moss, mganw_pred2)
 
 mganw_pred3 <- ggpredict(mganw_og, terms = c("wetness", "aspect")) %>% 
@@ -539,7 +559,8 @@ herb_hgaw2 <- left_join(herb, hgaw_pred2)
 
 # combined
 groups_ndvi <- full_join(lichen_lgan2, moss_mganw2)
-groups_wetness <- full_join(moss_mganw3, shrub_sgaw32)
+
+groups_wetness <- full_join(moss_mgws23, shrub_sgaw32)
 groups_wetness <- full_join(groups_wetness, grass_ggaw42)
 groups_wetness <- full_join(groups_wetness, herb_hgaw2)
 
@@ -553,8 +574,8 @@ groups_wetness <- groups_wetness %>%
                                              levels = c("grass", "lichen", "shrub", "moss", "herb"),
                                              labels = c("Graminoids", "Lichens", "Shrubs", "Bryophytes", 
                                                         "Forbs")))
-
-## NDVI
+## Plots ----
+# NDVI
 stripcoln <- strip_themed(background_x = elem_list_rect(fill = c("#E2E2CA", "#DCE9F9")))
                                                                           
 (prop_plot4 <- ggplot(groups_ndvi, aes(x, predicted, group = aspect)) +
@@ -578,10 +599,10 @@ stripcoln <- strip_themed(background_x = elem_list_rect(fill = c("#E2E2CA", "#DC
                                     labels = c("North", "South"),
                                     name = "Aspect"))
 
-ggsave("Figures/sp_prop_ndvi.png", plot = prop_plot4, width = 6, height = 3, units = "in")
+# ggsave("Figures/sp_prop_ndvi.png", plot = prop_plot4, width = 6, height = 3, units = "in")
 
 
-## wetness
+# Wetness
 stripcolw <- strip_themed(background_x = elem_list_rect(fill = c("#93AFDC", "#C3B283", "#DCE9F9", 
                                                                           "#9F9593")))
 
@@ -606,7 +627,7 @@ stripcolw <- strip_themed(background_x = elem_list_rect(fill = c("#93AFDC", "#C3
                                     labels = c("North", "South"),
                                     name = "Aspect"))
 
-ggsave("Figures/sp_prop_wetness.png", plot = prop_plot5, width = 6, height = 5, units = "in")
+# ggsave("Figures/sp_prop_wetness.png", plot = prop_plot5, width = 6, height = 5, units = "in")
 
 
 ## Combined plots
@@ -652,20 +673,22 @@ scales <- list(sp_group == "Graminoids" ~ scale_y_continuous(limits = c(0.05, 0.
 
 
 #### True Richness Plots ---- 
-## Richness ~ grazing 
+## Richness ~ grazing ----
 richness_site <- richness_site %>% 
-  mutate(aspect2 = case_when(aspect == "N" ~ "North",
-                             aspect == "S" ~ "South")) %>% 
-  mutate(sp_group = factor(sp_group, 
-                           levels = c("grass", "lichen", "shrub", "moss", "herb"),
-                           labels = c("Graminoids", "Lichens", "Shrubs", 
-                                      "Bryophytes", "Forbs")))
+                    mutate(aspect2 = case_when(aspect == "N" ~ "North",
+                                               aspect == "S" ~ "South")) %>% 
+                    mutate(sp_group = factor(sp_group, 
+                                             levels = c("grass", "lichen", "shrub", "moss", "herb"),
+                                             labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                        "Bryophytes", "Forbs")))
 
 (group_plot <- ggplot(richness_site, aes(grazing_m, richness_group, group = sp_group)) +
                 stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = T,
                             alpha = 0.1) +
                 labs(x = "Grazing (min)", y = "Species Richness") +
                 theme_thesis + 
+                theme(plot.margin = margin(r = 1, b = 0.5, l = 0.05, t = 0.05, unit = "cm"),
+                      legend.margin = margin(l = 5.5, t = 3.2, unit = "cm")) +
                 facet_wrap(~aspect2) +
                 scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
                                                        "#524B49"),
@@ -678,32 +701,35 @@ richness_site <- richness_site %>%
                                                                  "Bryophytes", "Forbs"),
                                   name = "Species Group"))
 
-ggsave("Figures/group_richness.png", plot = group_plot, width = 5.5, height = 4, units = "in")
+# ggsave("Figures/group_richness.png", plot = group_plot, width = 5.5, height = 4, units = "in")
 
 
-## Richness ~ Wetness
+## Richness ~ wetness ----
+# no aspect
 (group_plot2 <- ggplot(richness_site, aes(wetness, richness_group, group = sp_group)) +
-                stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = T,
-                            alpha = 0.1) +
-                labs(x = "Soil Wetness", y = "Species Richness") +
-                theme_thesis + 
-                theme(plot.margin = margin(0.5, 0.75, 0.5, 0.5, "cm")) +
-                scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
-                                                       "#524B49"),
-                                                       labels = c("Graminoids", "Lichens", "Shrubs", 
-                                                                  "Bryophytes", "Forbs"),
-                                   name = "Species Group") +
-                scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
-                                                      "#524B49"),
-                                                      labels = c("Graminoids", "Lichens", "Shrubs", 
-                                                                 "Bryophytes", "Forbs"),
-                                  name = "Species Group"))
+                  stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = T,
+                              alpha = 0.1) +
+                  labs(x = "Soil Wetness", y = "Species Richness") +
+                  theme_thesis + 
+                  theme(plot.margin = margin(0.5, 0.75, 0.5, 0.5, "cm")) +
+                  scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                         "#524B49"),
+                                                         labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                                    "Bryophytes", "Forbs"),
+                                     name = "Species Group") +
+                  scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                        "#524B49"),
+                                                        labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                                   "Bryophytes", "Forbs"),
+                                    name = "Species Group"))
 
+# facetted by aspect 
 (group_plot3 <- ggplot(richness_site, aes(wetness, richness_group, group = sp_group)) +
                   stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = T,
                               alpha = 0.1) +
                   labs(x = "Soil Wetness", y = "Species Richness") +
                   theme_thesis + 
+                  theme(plot.margin = margin(t = 0.5, l = 0.5, r = 0.05, b = 0.05, unit = "cm")) +
                   facet_wrap(~aspect2) +   # facetted by aspect 
                   scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
                                                          "#524B49"),
@@ -716,10 +742,11 @@ ggsave("Figures/group_richness.png", plot = group_plot, width = 5.5, height = 4,
                                                                    "Bryophytes", "Forbs"),
                                     name = "Species Group"))
 
-ggsave("Figures/group_wetness.png", plot = group_plot3, width = 5.5, height = 4, units = "in")
+# ggsave("Figures/group_wetness.png", plot = group_plot3, width = 5.5, height = 4, units = "in")
 
 
-## Richness ~ NDVI
+## Richness ~ NDVI ----
+# no aspect
 (group_plot4 <- ggplot(richness_site, aes(ndvi, richness_group, group = sp_group)) +
                   stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = T,
                               alpha = 0.1) +
@@ -737,11 +764,13 @@ ggsave("Figures/group_wetness.png", plot = group_plot3, width = 5.5, height = 4,
                                                                    "Bryophytes", "Forbs"),
                                     name = "Species Group"))
 
+# facetted by aspect
 (group_plot5 <- ggplot(richness_site, aes(ndvi, richness_group, group = sp_group)) +
                   stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = T,
                               alpha = 0.1) +
                   labs(x = "NDVI", y = "Species Richness") +
                   theme_thesis + 
+                  theme(plot.margin = margin(t = 0.5, r = 0.5, l = 0.05, b = 0.05, unit = "cm")) + 
                   facet_wrap(~aspect2) +
                   scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
                                                          "#524B49"),
@@ -754,16 +783,15 @@ ggsave("Figures/group_wetness.png", plot = group_plot3, width = 5.5, height = 4,
                                                                    "Bryophytes", "Forbs"),
                                     name = "Species Group"))
 
-ggsave("Figures/group_ndvi.png", plot = group_plot5, width = 5.5, height = 4, units = "in")
+# ggsave("Figures/group_ndvi.png", plot = group_plot5, width = 5.5, height = 4, units = "in")
 
 
+## Combined plots ----
+(group_grid <- ggarrange(group_plot, nrow = 2, ncol = 1, labels = c("A"), heights = c(1, 1),
+                         ggarrange(nrow = 1, ncol = 2, legend = F,
+                                   group_plot5, group_plot3, labels = c("B", "C"))))
 
-## Combined plots
-(group_grid <- ggarrange(nrow = 2, ncol = 2, common.legend = T, 
-                         group_plot, NULL,
-                         group_plot5, group_plot3, labels = c("A", "", "B", "C")))
-
-ggsave("Figures/true_richness.png", plot = group_grid, width = 6, height = 6, units = "in")
+ggsave("Figures/true_richness.png", plot = group_grid, width = 7, height = 6.5, units = "in")
 
 
 # . ----
@@ -783,6 +811,131 @@ gw_pred <- ggpredict(gw_glm2, terms = c("wetness"))
                 theme_thesis)
   
 ggsave("Figures/interaction_plot.png", plot = land_plot, width = 4, height = 4, units = "in")
+
+# . ----
+#### Coverage Plots ----
+coverage_site <- coverage_site %>% 
+                    mutate(aspect2 = case_when(aspect == "N" ~ "North",
+                                               aspect == "S" ~ "South")) %>% 
+                    mutate(sp_group = factor(sp_group, 
+                                             levels = c("grass", "lichen", "shrub", "moss", "herb"),
+                                             labels = c("Graminoids", "Lichens", "Shrubs", "Bryophytes", 
+                                                        "Forbs")))
+# Boxplot 
+(cov_box <- ggplot(coverage_site, aes(x = aspect2, y = coverage_perc)) +   
+              geom_boxplot(aes(fill = sp_group, color = sp_group), alpha = 0.6) +
+              theme_thesis + 
+              theme(plot.margin = margin(r = 0.5, b = 0.5, t = 0.5, unit = "cm")) + 
+              labs(x = "Aspect", y = "Coverage (%)") +
+              scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                     "#524B49"),
+                                                     labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                                "Bryophytes", "Forbs"),
+                                 name = "Species Group") +
+              scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                    "#524B49"),
+                                                    labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                               "Bryophytes", "Forbs"),
+                                name = "Species Group"))
+
+ggsave("Figures/coverage_boxplot.png", plot = cov_box, width = 5.3, height = 3.8, units = "in")
+
+## Coverage ~ Grazing + NDVI + Wetness + Slope ----
+# Grazing 
+(cov_graze <- ggplot(coverage_site, aes(x = grazing_m, y = coverage_perc)) +  
+                stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = T,
+                            alpha = 0.1) +
+                labs(x = "Grazing (min)", y = "Coverage (%)") +
+                theme_thesis + 
+                facet_wrap(~aspect2) +
+                scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                       "#524B49"),
+                                                       labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                                  "Bryophytes", "Forbs"),
+                                   name = "Species Group") +
+                scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                      "#524B49"),
+                                                      labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                                 "Bryophytes", "Forbs"),
+                                  name = "Species Group"))
+
+# NDVI
+(cov_ndvi <- ggplot(coverage_site, aes(x = ndvi, y = coverage_perc)) +  
+                stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = T,
+                            alpha = 0.1) +
+                labs(x = "NDVI", y = "Coverage (%)") +
+                theme_thesis + 
+                theme(plot.margin = margin(l = 0.5, b = 0.5, t = 0.5, unit = "cm")) + 
+            #    theme(plot.margin = margin(r = 0.5, b = 0.5, l = 0.05, t = 0.05, unit = "cm")) +
+                                                  # for 'cov_grid'
+                facet_wrap(~aspect2) +
+                scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                       "#524B49"),
+                                                       labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                                  "Bryophytes", "Forbs"),
+                                   name = "Species Group") +
+                scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                      "#524B49"),
+                                                      labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                                 "Bryophytes", "Forbs"),
+                                  name = "Species Group"))
+
+# Wetness
+(cov_wet <- ggplot(coverage_site, aes(x = wetness, y = coverage_perc)) +  
+              stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = T,
+                          alpha = 0.1) +
+              labs(x = "Soil Wetness", y = "Coverage (%)") +
+              theme_thesis + 
+              theme(plot.margin = margin(r = 0.5, t = 0.5, unit = "cm")) + 
+            #  theme(plot.margin = margin(l = 0.5, b = 0.5, r = 0.05, t = 0.05, unit = "cm")) +
+                                                  # for 'cov_grid'
+              facet_wrap(~aspect2) +
+              scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                     "#524B49"),
+                                                     labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                                "Bryophytes", "Forbs"),
+                                 name = "Species Group") +
+              scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                    "#524B49"),
+                                                    labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                               "Bryophytes", "Forbs"),
+                                name = "Species Group"))
+
+# Slope 
+(cov_slope <- ggplot(coverage_site, aes(x = slope_deg, y = coverage_perc)) +  
+                stat_smooth(method = "lm", aes(color = sp_group, fill = sp_group), se = T,
+                            alpha = 0.1) +
+                labs(x = "Slope Angle (˚)", y = "Coverage (%)") +
+                theme_thesis + 
+                theme(plot.margin = margin(l = 0.5, t = 0.5, unit = "cm")) + 
+             #   theme(plot.margin = margin(t = 0.5, l = 0.05, r = 0.05, b = 0.05, unit = "cm"),
+              #        legend.margin = margin(l = 4.2, t = 3.2, unit = "cm")) +
+                                                  # for 'cov_grid'
+                facet_wrap(~aspect2) +
+                scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                       "#524B49"),
+                                                       labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                                  "Bryophytes", "Forbs"),
+                                   name = "Species Group") +
+                scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
+                                                      "#524B49"),
+                                                      labels = c("Graminoids", "Lichens", "Shrubs", 
+                                                                 "Bryophytes", "Forbs"),
+                                  name = "Species Group"))
+
+## Combined plots ----
+(cov_grid <- ggarrange(ggarrange(cov_ndvi, cov_wet, ncol = 2, legend = F, labels = c("A", "B")), 
+                       nrow = 2, heights = c(1, 1),
+                       ggarrange(cov_slope, labels = c("C"))))
+
+# with boxplot 
+(cov_grid2 <- ggarrange(cov_box, cov_ndvi, cov_wet, cov_slope,
+                        ncol = 2, nrow = 2, common.legend = T, labels = c("A", "B", "C", "D"), 
+                        heights = c(1, 1)))
+
+# ggsave("Figures/coverage.png", plot = cov_grid, width = 6, height = 6, units = "in")
+ggsave("Figures/coverage_full.png", plot = cov_grid2, width = 6, height = 6, units = "in")
+
 
 # . ----
 #### NMDS Plot (Plots) ----
@@ -874,13 +1027,14 @@ gisfit3 <- envfit(nmds7, gisvar_plots, permu = 999)
 gisfit3 
 
 gisarrows2 <- as.data.frame(scores(gisfit3, "vectors") * ordiArrowMul(gisfit3))
+gisarrows2
 
 # editing row names 
 gisarrows2 <- gisarrows2 %>% 
                 mutate(varnames = c("NDVI", "Slope angle", "Soil wetness", "Soil depth",
                                  "Grazing duration")) %>% 
-                mutate(NMDS1_nudge = c(-0.9492608, -0.8637207, 0.5711949, 0.17528655, 0.5524088),
-                       NMDS2_nudge = c(-0.6061739, 0.67834401, -0.89000, -0.1912312, -0.09963324))
+                mutate(NMDS1_nudge = c(-1.25, -1.14, 0.78, 0.20, 0.60),
+                       NMDS2_nudge = c(-0.69, 0.85, -1.07, -0.23, -0.13))
 
 
 ## NMDS Plots
@@ -915,7 +1069,7 @@ gisarrows2 <- gisarrows2 %>%
                   xlim(c(-1.4, 1.4)) +
                   ylim(c(-1.4, 1.4)))
 
-ggsave("Figures/nmds.png", plot = nmds_plot, width = 5.5, height = 4.5, units = "in")
+ggsave("Figures/nmds.png", plot = nmds_plot, width = 5.5, height = 5, units = "in")
 
 # points colored by grazing (not using!!)
 (nmds_plot2 <- ggplot(data.scoresb, aes(x = NMDS1, y = NMDS2)) + 
