@@ -25,7 +25,6 @@ slope <- read.csv("Data/slope.csv")
 soildepth <- read.csv("Data/soildepth.csv")
 wetness <- read.csv("Data/wetness.csv")
 
-?TukeyHSD()
 #### Data Exploration & Cleaning ----
 view(sites)
 view(plots)
@@ -236,7 +235,13 @@ coverage_site <- coverage %>%
                     mutate(ndvi = mean(ndvi),
                            slope_deg = mean(slope_deg),
                            wetness = mean(wetness),
-                           soil_depth = mean(soil_depth)) %>% 
+                           soil_depth = mean(soil_depth),
+                           ndvi_s = mean(ndvi_s),
+                           slope_deg_s = mean(slope_deg_s),
+                           wetness_s = mean(wetness_s),
+                           soil_depth_s = mean(soil_depth_s),
+                           grazing_m = mean(grazing_m),
+                           grazing_m_s = mean(grazing_m_s)) %>% 
                     group_by(site_nr, sp_group, aspect) %>% 
                     summarize(coverage_cm2 = mean(coverage_cm2),
                               coverage_perc = mean(coverage_perc),
@@ -245,7 +250,12 @@ coverage_site <- coverage %>%
                               slope_deg = mean(slope_deg),
                               wetness = mean(wetness),
                               soil_depth = mean(soil_depth),
-                              grazing_m = mean(grazing_m))
+                              ndvi_s = mean(ndvi_s),
+                              slope_deg_s = mean(slope_deg_s),
+                              wetness_s = mean(wetness_s),
+                              soil_depth_s = mean(soil_depth_s),
+                              grazing_m = mean(grazing_m),
+                              grazing_m_s = mean(grazing_m_s))
 coverage_site <- as.data.frame(coverage_site)
 str(coverage_site)
 
@@ -1281,6 +1291,626 @@ summary(hgaw_og)
 
 
 # . ----
+#### Coverage Models ----
+### Lichens ----
+lichen_cov <- coverage_site %>% filter(sp_group == "lichen")
+hist(lichen_cov$coverage_perc)   # a bit skewed 
+
+lg1 <- lm(coverage_perc ~ grazing_m, data = lichen_cov)
+plot(lg1)
+shapiro.test(resid(lg1))   # p < 0.05 = not normal
+bptest(lg1)  # p > 0.05 = no heteroskedasticity though 
+
+lga <- lm(coverage_perc ~ grazing_m + aspect, data = lichen_cov)
+shapiro.test(resid(lga))   # p < 0.05 = not normal
+bptest(lga)  # p > 0.05 = no heteroskedasticity though 
+
+lga2 <- lm(coverage_perc ~ grazing_m * aspect, data = lichen_cov)
+shapiro.test(resid(lga2))   # p < 0.05 = not normal
+bptest(lga2)  # p > 0.05 = no heteroskedasticity though 
+
+## Transformations 
+# log
+lg_log <- lm(log(coverage_perc) ~ grazing_m, data = lichen_cov)
+shapiro.test(resid(lg_log))   # p > 0.05 = normal
+bptest(lg_log)  # p > 0.05 = and no heteroskedasticity
+
+lga_log <- lm(log(coverage_perc) ~ grazing_m + aspect, data = lichen_cov)
+shapiro.test(resid(lga_log))   # p > 0.05 = normal
+bptest(lga_log)  # p > 0.05 = and no heteroskedasticity
+
+lga_log2 <- lm(log(coverage_perc) ~ grazing_m * aspect, data = lichen_cov)
+shapiro.test(resid(lga_log2))   # p > 0.05 = normal
+bptest(lga_log2)  # p > 0.05 = and no heteroskedasticity
+
+AIC(lg_log, lga_log, lga_log2)  # 'lg_log' (only grazing) is best so far 
+
+## Models with GIS variables 
+# NDVI
+lgn_log <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s, data = lichen_cov)
+lgan_log <- lm(log(coverage_perc) ~ grazing_m_s + aspect + ndvi_s, data = lichen_cov)
+lgan_log2 <- lm(log(coverage_perc) ~ grazing_m_s + aspect*ndvi_s, data = lichen_cov)
+lgan_log3 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + ndvi_s, data = lichen_cov)
+lgan_log4 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + ndvi_s*aspect, data = lichen_cov)
+
+AIC(lg_log, lga_log, lgn_log, lgan_log, lgan_log2, lgan_log3, lgan_log4)
+# 'lgn_log' = best
+
+# Slope
+lgs_log <- lm(log(coverage_perc) ~ grazing_m_s + slope_deg_s, data = lichen_cov)
+lgas_log <- lm(log(coverage_perc) ~ grazing_m_s + aspect + slope_deg_s, data = lichen_cov)
+lgas_log2 <- lm(log(coverage_perc) ~ grazing_m_s + aspect*slope_deg_s, data = lichen_cov)
+lgas_log3 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + slope_deg_s, data = lichen_cov)
+lgas_log4 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + slope_deg_s*aspect, data = lichen_cov)
+
+AIC(lgn_log, lg_log, lga_log, lgs_log, lgas_log, lgas_log2, lgas_log3, lgas_log4)
+# 'lgn_log' = still best 
+
+# Wetness
+lgw_log <- lm(log(coverage_perc) ~ grazing_m_s + wetness_s, data = lichen_cov)
+lgaw_log <- lm(log(coverage_perc) ~ grazing_m_s + aspect + wetness_s, data = lichen_cov)
+lgaw_log2 <- lm(log(coverage_perc) ~ grazing_m_s + aspect*wetness_s, data = lichen_cov)
+lgaw_log3 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + wetness_s, data = lichen_cov)
+lgaw_log4 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + wetness_s*aspect, data = lichen_cov)
+
+AIC(lgn_log, lg_log, lga_log, lgw_log, lgaw_log, lgaw_log2, lgaw_log3, lgaw_log4)
+# 'lgn_log' = still best
+
+# Multiple variables 
+lgns_log <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s + slope_deg_s, data = lichen_cov)  # standardized
+lgans_log <- lm(log(coverage_perc) ~ grazing_m_s + aspect + ndvi_s + slope_deg_s, data = lichen_cov)  
+
+lgnw_log <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s + wetness_s, data = lichen_cov)  # standardized
+lgnw_log2 <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s*wetness_s, data = lichen_cov)
+lganw_log <- lm(log(coverage_perc) ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = lichen_cov)  
+
+min(AIC(lgn_log, lg_log, lga_log, lgns_log, lgans_log, lgnw_log, lgnw_log2, lganw_log)[,2])    
+# lowest == 83.58628
+
+AIC(lgn_log, lg_log, lga_log, lgns_log, lgans_log, lgnw_log, lgnw_log2, lganw_log)
+# 'lgn_log' = still lowest
+
+
+## Choosing the best model 
+l_null <- lm(log(coverage_perc) ~ 1, data = lichen_cov)
+AIC(l_null, lgn_log)   # 'lgn_log' is definitely lower than the null 
+
+shapiro.test(resid(lgn_log))  # normal
+bptest(lgn_log)  # no heteroskedasticity 
+
+
+### Mosses ----
+moss_cov <- coverage_site %>% filter(sp_group == "moss")
+hist(moss$coverage_perc)   # looks good 
+
+mg1 <- lm(coverage_perc ~ grazing_m, data = moss_cov)
+plot(mg1)
+shapiro.test(resid(mg1))   # p < 0.05 = not normal
+bptest(mg1)  # p > 0.05 = no heteroskedasticity   
+
+mga <- lm(coverage_perc ~ grazing_m + aspect, data = moss_cov)
+shapiro.test(resid(mga))   # p < 0.05 = not normal
+bptest(mga)  # p > 0.05 = no heteroskedasticity  
+
+mga2 <- lm(coverage_perc ~ grazing_m * aspect, data = moss_cov)
+shapiro.test(resid(mga2))   # p < 0.05 = not normal
+bptest(mga2)  # p > 0.05 = no heteroskedasticity  
+
+AIC(mg1, mga, mga2)  # so far, 'mga' is best but not by 2 
+
+## Transformations 
+# log
+mg_log <- lm(log(coverage_perc) ~ grazing_m, data = moss_cov)
+shapiro.test(resid(mg_log))   # p > 0.05 = normal
+bptest(mg_log)  # p > 0.05 = and no heteroskedasticity
+
+mga_log <- lm(log(coverage_perc) ~ grazing_m + aspect, data = moss_cov)
+shapiro.test(resid(mga_log))   # p > 0.05 = normal
+bptest(mga_log)  # p > 0.05 = and no heteroskedasticity
+
+mga_log2 <- lm(log(coverage_perc) ~ grazing_m * aspect, data = moss_cov)
+shapiro.test(resid(mga_log2))   # p > 0.05 = normal
+bptest(mga_log2)  # p > 0.05 = and no heteroskedasticity
+
+AIC(mg_log, mga_log, mga_log2)  # 'mga_log' (grazing and aspect) is best so far 
+
+
+## Models with GIS variables 
+# NDVI
+mgn <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s, data = moss_cov)
+mgan <- lm(log(coverage_perc) ~ grazing_m_s + aspect + ndvi_s, data = moss_cov)
+mgan2 <- lm(log(coverage_perc) ~ grazing_m_s + aspect*ndvi_s, data = moss_cov)
+mgan3 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + ndvi_s, data = moss_cov)
+mgan4 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + ndvi_s*aspect, data = moss_cov)
+
+AIC(mg1, mga, mgn, mgan, mgan2, mgan3, mgan4)
+# 'mgn' = lowest, 'mgan' also good 
+
+# Slope
+mgs <- lm(log(coverage_perc) ~ grazing_m_s + slope_deg_s, data = moss_cov)
+mgas <- lm(log(coverage_perc) ~ grazing_m_s + aspect + slope_deg_s, data = moss_cov)
+mgas2 <- lm(log(coverage_perc) ~ grazing_m_s + aspect*slope_deg_s, data = moss_cov)
+mgas3 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + slope_deg_s, data = moss_cov)
+mgas4 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + slope_deg_s*aspect, data = moss_cov)
+
+AIC(mgan, mgn, mgs, mgas, mgas2, mgas3, mgas4)
+# 'mgs' or 'mgas' = best 
+
+# Wetness
+mgw <- lm(log(coverage_perc) ~ grazing_m_s + wetness_s, data = moss_cov)
+mgaw <- lm(log(coverage_perc) ~ grazing_m_s + aspect + wetness_s, data = moss_cov)
+mgaw2 <- lm(log(coverage_perc) ~ grazing_m_s + aspect*wetness_s, data = moss_cov)
+mgaw3 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + wetness_s, data = moss_cov)
+mgaw4 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + wetness_s*aspect, data = moss_cov)
+
+AIC(mgan, mgn, mgs, mgas, mga, mgw, mgaw, mgaw2, mgaw3, mgaw4)
+# 'mgaw4' = lowest but >2, but 7 DF 
+
+# Multiple GIS variables 
+mgnw <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s + wetness_s, data = moss_cov)  # standardized
+mgnw2 <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s*wetness_s, data = moss_cov)  # standardized
+mganw <- lm(log(coverage_perc) ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = moss_cov)  
+
+mgns <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s + slope_deg_s, data = moss_cov)  # standardized
+mgans <- lm(log(coverage_perc) ~ grazing_m_s + aspect + ndvi_s + slope_deg_s, data = moss_cov)  
+
+mgws <- lm(log(coverage_perc) ~ grazing_m_s + wetness_s + slope_deg_s, data = moss_cov)  # standardized
+mgws2 <- lm(log(coverage_perc) ~ grazing_m_s + wetness_s*slope_deg_s, data = moss_cov)  # standardized
+mgaws <- lm(log(coverage_perc) ~ grazing_m_s + aspect + wetness_s + slope_deg_s, data = moss_cov)  
+mgaws2 <- lm(log(coverage_perc) ~ grazing_m_s + aspect + wetness_s*slope_deg_s, data = moss_cov)  
+
+
+min(AIC(mgaw4, mgnw, mgnw2, mganw, mgns, mgans, mgws, mgws2, mgaws, mgaws2)[,2])    
+# lowest == 70.46456
+
+AIC(mgaw4, mgnw, mgnw2, mganw, mgns, mgans, mgws, mgws2, mgaws, mgaws2)
+# 'mgaw4' = lowest by > 2 units 
+
+## Choosing the best model 
+m_null <- lm(log(coverage_perc) ~ 1, data = moss_cov)
+AIC(m_null, mgaw4)   # better than the null
+
+shapiro.test(resid(mgaw4))
+bptest(mgaw4)
+
+
+### Shrubs ----
+shrub_cov <- coverage_site %>% filter(sp_group == "shrub")
+hist(shrub$coverage_perc)   # looks good  
+
+sg1 <- lm(coverage_perc ~ grazing_m, data = shrub_cov)
+plot(sg1)
+shapiro.test(resid(sg1))   # p > 0.05 = normal
+bptest(sg1)  # p > 0.05 = no heteroskedasticity either  
+
+sga <- lm(coverage_perc ~ grazing_m + aspect, data = shrub_cov)
+shapiro.test(resid(sga))   # p > 0.05 = normal 
+bptest(sga)  # p > 0.05 = no heteroskedasticity  
+
+sga2 <- lm(coverage_perc ~ grazing_m * aspect, data = shrub_cov)
+shapiro.test(resid(sga2))   # p > 0.05 = normal
+bptest(sga2)  # p > 0.05 = no heteroskedasticity  
+
+AIC(sg1, sga, sga2)  # 'sg1' = best so far 
+
+## Models with GIS variables 
+# NDVI
+sgn <- lm(coverage_perc ~ grazing_m_s + ndvi_s, data = shrub_cov)
+sgan <- lm(coverage_perc ~ grazing_m_s + aspect + ndvi_s, data = shrub_cov)
+sgan2 <- lm(coverage_perc ~ grazing_m_s + aspect*ndvi_s, data = shrub_cov)
+sgan3 <- lm(coverage_perc ~ grazing_m_s*aspect + ndvi_s, data = shrub_cov)
+sgan4 <- lm(coverage_perc ~ grazing_m_s*aspect + ndvi_s*aspect, data = shrub_cov)
+
+AIC(sg1, sgn, sgan, sgan2, sgan3, sgan4)
+# 'sgn' = best 
+
+# Slope
+sgs <- lm(coverage_perc ~ grazing_m_s + slope_deg_s, data = shrub_cov)
+sgas <- lm(coverage_perc ~ grazing_m_s + aspect + slope_deg_s, data = shrub_cov)
+sgas2 <- lm(coverage_perc ~ grazing_m_s + aspect*slope_deg_s, data = shrub_cov)
+sgas3 <- lm(coverage_perc ~ grazing_m_s*aspect + slope_deg_s, data = shrub_cov)
+sgas4 <- lm(coverage_perc ~ grazing_m_s*aspect + slope_deg_s*aspect, data = shrub_cov)
+
+AIC(sg1, sgn, sgs, sgas, sgas2, sgas3, sgas4)
+# 'sgs' = best 
+
+# Wetness
+sgw <- lm(coverage_perc ~ grazing_m_s + wetness_s, data = shrub_cov)
+sgaw <- lm(coverage_perc ~ grazing_m_s + aspect + wetness_s, data = shrub_cov)
+sgaw2 <- lm(coverage_perc ~ grazing_m_s + aspect*wetness_s, data = shrub_cov)
+sgaw3 <- lm(coverage_perc ~ grazing_m_s*aspect + wetness_s, data = shrub_cov)
+sgaw4 <- lm(coverage_perc ~ grazing_m_s*aspect + wetness_s*aspect, data = shrub_cov)
+
+AIC(sgs, sgw, sgaw, sgaw2, sgaw3, sgaw4)
+# basically all the same, 'sgs' or 'sgw' = identical and simplest 
+
+# Multiple GIS var
+sgnw <- lm(coverage_perc ~ grazing_m_s + ndvi_s + wetness_s, data = shrub_cov)  # standardized
+sgnw2 <- lm(coverage_perc ~ grazing_m_s + ndvi_s*wetness_s, data = shrub_cov)  # standardized
+sganw <- lm(coverage_perc ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = shrub_cov)  
+
+sgns <- lm(coverage_perc ~ grazing_m_s + ndvi_s + slope_deg_s, data = shrub_cov)  # standardized
+sgans <- lm(coverage_perc ~ grazing_m_s + aspect + ndvi_s + slope_deg_s, data = shrub_cov)  
+
+sgws <- lm(coverage_perc ~ grazing_m_s + wetness_s + slope_deg_s, data = shrub_cov)  # standardized
+sgws2 <- lm(coverage_perc ~ grazing_m_s + wetness_s*slope_deg_s, data = shrub_cov)  # standardized
+sgaws <- lm(coverage_perc ~ grazing_m_s + aspect + wetness_s + slope_deg_s, data = shrub_cov)  
+
+min(AIC(sgs, sgw, sgas, sgnw, sgnw2, sganw, sgns, sgans, sgws, sgws2, sgaws)[,2])    
+# lowest == 285.5745
+
+AIC(sgs, sgw, sgas, sgnw, sgnw2, sganw, sgns, sgans, sgws, sgws2, sgaws)
+# 'sgnw2' = lowest but simpler and within 2 units is 'sgnw'
+
+
+## Choosing the best model 
+s_null <- lm(coverage_perc ~ 1, data = shrub_cov)
+AIC(s_null, sgnw2, sgnw)   # 'sgnw' is better than the null
+
+# checking if interactions add anything
+summary(sgnw)  # adjusted R2 = 0.455, going with this one 
+summary(sgnw2)  # adjusted R2 = 0.4887 (slightly better but more complex)
+
+
+### Grasses ----
+grass_cov <- coverage_site %>% filter(sp_group == "grass")
+hist(grass$coverage_perc)   # looks pretty ok  
+
+gg1 <- lm(coverage_perc ~ grazing_m, data = grass_cov)
+plot(gg1)
+shapiro.test(resid(gg1))   # p < 0.05 = not normal
+bptest(gg1)  # p > 0.05 = no heteroskedasticity   
+
+gga <- lm(coverage_perc ~ grazing_m + aspect, data = grass_cov)
+shapiro.test(resid(gga))   # p < 0.05 = not normal 
+bptest(gga)  # p > 0.05 = no heteroskedasticity  
+
+gga2 <- lm(coverage_perc ~ grazing_m * aspect, data = grass_cov)
+shapiro.test(resid(gga2))   # p < 0.05 = not normal
+bptest(gga2)  # p > 0.05 = no heteroskedasticity  
+
+AIC(gg1, gga, gga2)  # 'gg1' = the best 
+
+## Transformations 
+# log
+gg_log <- lm(log(coverage_perc) ~ grazing_m, data = grass_cov)
+shapiro.test(resid(gg_log))   # p > 0.05 = normal
+bptest(gg_log)  # p > 0.05 = and no heteroskedasticity
+
+gga_log <- lm(log(coverage_perc) ~ grazing_m + aspect, data = grass_cov)
+shapiro.test(resid(gga_log))   # p > 0.05 = normal
+bptest(gga_log)  # p > 0.05 = and no heteroskedasticity
+
+gga_log2 <- lm(log(coverage_perc) ~ grazing_m * aspect, data = grass_cov)
+shapiro.test(resid(gga_log2))   # p > 0.05 = normal
+bptest(gga_log2)  # p > 0.05 = and no heteroskedasticity
+
+AIC(gg_log, gga_log, gga_log2)  # 'gg_log' (grazing only) is best so far 
+
+
+## Models with GIS variables 
+# NDVI
+ggn <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s, data = grass_cov)
+ggan <- lm(log(coverage_perc) ~ grazing_m_s + aspect + ndvi_s, data = grass_cov)
+ggan2 <- lm(log(coverage_perc) ~ grazing_m_s + aspect*ndvi_s, data = grass_cov)
+ggan3 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + ndvi_s, data = grass_cov)
+ggan4 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + ndvi_s*aspect, data = grass_cov)
+
+AIC(gg1, ggn, ggan, ggan2, ggan3, ggan4)
+# 'ggn' = best because it's the simplest 
+
+# Slope
+ggs <- lm(log(coverage_perc) ~ grazing_m_s + slope_deg_s, data = grass_cov)
+ggas <- lm(log(coverage_perc) ~ grazing_m_s + aspect + slope_deg_s, data = grass_cov)
+ggas2 <- lm(log(coverage_perc) ~ grazing_m_s + aspect*slope_deg_s, data = grass_cov)
+ggas3 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + slope_deg_s, data = grass_cov)
+ggas4 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + slope_deg_s*aspect, data = grass_cov)
+
+AIC(ggn, ggs, ggas, ggas2, ggas3, ggas4)
+# 'ggn' = still best
+
+# Wetness
+ggw <- lm(log(coverage_perc) ~ grazing_m_s + wetness_s, data = grass_cov)
+ggaw <- lm(log(coverage_perc) ~ grazing_m_s + aspect + wetness_s, data = grass_cov)
+ggaw2 <- lm(log(coverage_perc) ~ grazing_m_s + aspect*wetness_s, data = grass_cov)
+ggaw3 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + wetness_s, data = grass_cov)
+ggaw4 <- lm(log(coverage_perc) ~ grazing_m_s*aspect + wetness_s*aspect, data = grass_cov)
+
+AIC(ggn, ggw, ggaw, ggaw2, ggaw3, ggaw4)
+# 'ggaw4' = the best but not by 2, simpler = 'ggaw3'
+
+# Multiple GIS var 
+ggnw <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s + wetness_s, data = grass_cov)  # standardized
+ggnw2 <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s*wetness_s, data = grass_cov)  
+gganw <- lm(log(coverage_perc) ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = grass_cov) 
+
+ggns <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s + slope_deg_s, data = grass_cov)  # standardized
+ggans <- lm(log(coverage_perc) ~ grazing_m_s + aspect + ndvi_s + slope_deg_s, data = grass_cov)  
+
+ggws <- lm(log(coverage_perc) ~ grazing_m_s + wetness_s + slope_deg_s, data = grass_cov)  # standardized
+ggws2 <- lm(log(coverage_perc) ~ grazing_m_s + wetness_s*slope_deg_s, data = grass_cov)  # standardized
+ggaws <- lm(log(coverage_perc) ~ grazing_m_s + aspect + wetness_s + slope_deg_s, data = grass_cov)  
+
+min(AIC(ggaw3, ggn, ggnw, ggnw2, gganw, ggns, ggans, ggws, ggws2, ggaws)[,2])    
+# lowest == 91.34718
+
+AIC(ggaw4, gg1, ggnw, ggnw2, gganw, ggns, ggans, ggws, ggws2, ggaws)
+# 'gganw' = best 
+
+
+## Choosing the best model 
+g_null <- lm(log(coverage_perc) ~ 1, data = grass_cov)
+AIC(g_null, gganw)   # 'gganw' is better than the null
+
+shapiro.test(resid(gganw))  # normal
+bptest(gganw)  # no heteroskedasticity
+
+
+### Herbs ----
+herb_cov <- coverage_site %>% filter(sp_group == "herb")
+hist(herb_cov$coverage_perc)    
+
+hg1 <- lm(coverage_perc ~ grazing_m, data = herb_cov)
+plot(hg1)
+shapiro.test(resid(hg1))   # p < 0.05 = not normal
+bptest(hg1)  # p > 0.05 = no heteroskedasticity either  
+
+hga <- lm(coverage_perc ~ grazing_m + aspect, data = herb_cov)
+shapiro.test(resid(hga))   # p < 0.05 = not normal 
+bptest(hga)  # p > 0.05 = no heteroskedasticity  
+
+hga2 <- lm(coverage_perc ~ grazing_m * aspect, data = herb_cov)
+shapiro.test(resid(hga2))   # p < 0.05 = not normal
+bptest(hga2)  # p > 0.05 = no heteroskedasticity  
+
+AIC(hg1, hga, hga2)  # 'hg1' = the best 
+
+## Transformations 
+# log
+hg_log <- lm(log(coverage_perc) ~ grazing_m, data = herb_cov)
+shapiro.test(resid(hg_log))   # p < 0.05 = not normal
+bptest(hg_log)  # p > 0.05 = no heteroskedasticity
+
+hga_log <- lm(log(coverage_perc) ~ grazing_m + aspect, data = herb_cov)
+shapiro.test(resid(hga_log))   # p < 0.05 = not normal
+bptest(hga_log)  # p > 0.05 = no heteroskedasticity
+
+hga_log2 <- lm(log(coverage_perc) ~ grazing_m * aspect, data = herb_cov)
+shapiro.test(resid(hga_log2))   # p < 0.05 = not normal
+bptest(hga_log2)  # p > 0.05 = no heteroskedasticity
+
+AIC(hg_log, hga_log, hga_log2)  # 'gg_log' (grazing only) is best so far 
+
+# sqrt
+hg_sqrt <- lm(sqrt(coverage_perc) ~ grazing_m, data = herb_cov)
+shapiro.test(resid(hg_sqrt))   # p > 0.05 = normal
+bptest(hg_sqrt)  # p > 0.05 = no heteroskedasticity
+
+hga_sqrt <- lm(sqrt(coverage_perc) ~ grazing_m + aspect, data = herb_cov)
+shapiro.test(resid(hga_sqrt))   # p < 0.05 = not normal but close 
+bptest(hga_sqrt)  # p > 0.05 = no heteroskedasticity
+
+hga_sqrt2 <- lm(sqrt(coverage_perc) ~ grazing_m * aspect, data = herb_cov)
+shapiro.test(resid(hga_sqrt2))   # p > 0.05 = normal
+bptest(hga_sqrt2)  # p > 0.05 = no heteroskedasticity
+
+AIC(hg_sqrt, hga_sqrt, hga_sqrt2)  # 'hg_sqrt' (grazing only) is best so far 
+
+# not able to transform without risking it not being normal in the end 
+hg_glm <- glm(coverage_perc ~ grazing_m, family = Gamma(link = "log"), data = herb_cov)
+hga_glm <- glm(coverage_perc ~ grazing_m + aspect, family = Gamma(link = "log"), data = herb_cov)
+hga_glm2 <- glm(coverage_perc ~ grazing_m*aspect, family = Gamma(link = "log"), data = herb_cov)
+
+AIC(hg_glm, hga_glm, hga_glm2)  # 'hg_glm' is best 
+
+## Models with GIS variables 
+# NDVI
+hgn <- glm(coverage_perc ~ grazing_m_s + ndvi_s, family = Gamma(link = "log"), data = herb_cov)
+hgan <- glm(coverage_perc ~ grazing_m_s + aspect + ndvi_s, family = Gamma(link = "log"), data = herb_cov)
+hgan2 <- glm(coverage_perc ~ grazing_m_s + aspect*ndvi_s, family = Gamma(link = "log"), data = herb_cov)
+hgan3 <- glm(coverage_perc ~ grazing_m_s*aspect + ndvi_s, family = Gamma(link = "log"), data = herb_cov)
+hgan4 <- glm(coverage_perc ~ grazing_m_s*aspect + ndvi_s*aspect, family = Gamma(link = "log"), 
+             data = herb_cov)
+
+AIC(hg_glm, hgn, hgan, hgan2, hgan3, hgan4)
+# 'hg_glm' = still best
+
+# Slope
+hgs <- glm(coverage_perc ~ grazing_m_s + slope_deg_s, family = Gamma(link = "log"), data = herb_cov)
+hgas <- glm(coverage_perc ~ grazing_m_s + aspect + slope_deg_s, family = Gamma(link = "log"), 
+            data = herb_cov)
+hgas2 <- glm(coverage_perc ~ grazing_m_s + aspect*slope_deg_s, family = Gamma(link = "log"), 
+             data = herb_cov)
+hgas3 <- glm(coverage_perc ~ grazing_m_s*aspect + slope_deg_s, family = Gamma(link = "log"), 
+             data = herb_cov)
+hgas4 <- glm(coverage_perc ~ grazing_m_s*aspect + slope_deg_s*aspect, family = Gamma(link = "log"), 
+             data = herb_cov)
+
+AIC(hg_glm, hgs, hgas, hgas2, hgas3, hgas4)
+# 'hgs' = best
+
+# Wetness
+hgw <- glm(coverage_perc ~ grazing_m_s + wetness_s, family = Gamma(link = "log"), data = herb_cov)
+hgaw <- glm(coverage_perc ~ grazing_m_s + aspect + wetness_s, family = Gamma(link = "log"), 
+            data = herb_cov)
+hgaw2 <- glm(coverage_perc ~ grazing_m_s + aspect*wetness_s, family = Gamma(link = "log"), 
+             data = herb_cov)
+hgaw3 <- glm(coverage_perc ~ grazing_m_s*aspect + wetness_s, family = Gamma(link = "log"), 
+             data = herb_cov)
+hgaw4 <- glm(coverage_perc ~ grazing_m_s*aspect + wetness_s*aspect, family = Gamma(link = "log"), 
+             data = herb_cov)
+
+AIC(hg_glm, hgs, hgw, hgaw, hgaw2, hgaw3, hgaw4)
+# 'hgw' = the best and simplest 
+
+# Multiple GIS var (no interactions)
+hgnw <- glm(coverage_perc ~ grazing_m_s + ndvi_s + wetness_s, family = Gamma(link = "log"), 
+            data = herb_cov)  # standardized
+hgnw2 <- glm(coverage_perc ~ grazing_m_s + ndvi_s*wetness_s, family = Gamma(link = "log"), 
+             data = herb_cov)  
+hganw <- glm(coverage_perc ~ grazing_m_s + aspect + ndvi_s + wetness_s, family = Gamma(link = "log"), 
+             data = herb_cov)  
+
+hgns <- glm(coverage_perc ~ grazing_m_s + ndvi_s + slope_deg_s, family = Gamma(link = "log"), 
+            data = herb_cov)  # standardized
+#hgans <- glm(coverage_perc ~ grazing_m_s + aspect + ndvi_s + slope_deg_s, family = Gamma(link = "log"), 
+ #            data = herb_cov)  
+
+hgws <- glm(coverage_perc ~ grazing_m_s + wetness_s + slope_deg_s, family = Gamma(link = "log"), 
+            data = herb_cov)  # standardized
+hgws2 <- glm(coverage_perc ~ grazing_m_s + wetness_s*slope_deg_s, family = Gamma(link = "log"), 
+             data = herb_cov)  
+hgaws <- glm(coverage_perc ~ grazing_m_s + aspect + wetness_s + slope_deg_s, family = Gamma(link = "log"), 
+             data = herb_cov)  
+
+min(AIC(hgaw, hgw, hg_glm, hgnw, hgnw2, hganw, hgns, hgws, hgws2, hgaws)[,2])    
+# lowest == 80.8764
+
+AIC(hgaw, hgw, hg_glm, hgnw, hgnw2, hganw, hgns, hgws, hgws2, hgaws)
+# 'hgw' = best and simplest
+
+
+## Choosing the best model 
+h_null <- glm(coverage_perc ~ 1, family = Gamma(link = "log"), data = herb_cov)
+AIC(h_null, hgaw, hgw)   # both are better than the null, use 'hgw'
+
+
+## Coverage Model Results ## ----
+## LICHEN
+lgn_log <- lm(log(coverage_perc) ~ grazing_m_s + ndvi_s, data = lichen_cov)
+summary(lgn_log)      ## USE THIS MODEL'S RESULTS ##
+  # int: exp(2.7890) 
+  # grazing_m_s:exp(-0.1109), p = 0.42060 (not significant)
+  # ndvi_s: exp(0.6350), p = 0.00014 (SIGNIFICANT)
+# adj R2 = 0.3397
+
+# checking residuals 
+plot(residuals(lgn_log) ~ predict(lgn_log, type = "response"))  # looks good 
+
+## Interpreting my model
+# grazing
+-0.1109/sd(lichen$grazing_m)  # = -0.01316509
+# ndvi
+0.6350/sd(lichen$ndvi)    # = 11.70481
+
+# comparing to OG model (not scaled)
+lgn_log_og <- lm(log(coverage_perc) ~ grazing_m + ndvi, data = lichen_cov)
+summary(lgn_log_og)
+  # grazing = exp(-0.01311)
+  # NDVI = exp(-10.82933)
+# similar 
+
+
+## MOSS
+mgaw4 <- lm(log(coverage_perc) ~ grazing_m_s * aspect + wetness_s * aspect, data = moss_cov)
+summary(mgaw4)      ## USE THIS MODEL'S RESULTS ##
+  # aspect NORTH (intercept): exp(2.3961) 
+  # aspect SOUTH: exp(-0.4495), p = 0.0562 (not significant)
+  # grazing_s NORTH: exp(-0.1504), p = 0.3511 (not significant)
+  # grazing_s SOUTH: exp(0.4368), p = 0.0696 (not significant)
+  # wetness_s NORTH: exp(-0.1865), p = 0.5424 (not significant)
+  # wetness_s SOUTH: exp(0.7898), p = 0.0415 (SIGNIFICANT)
+# adjusted R2 = 0.2485
+
+# checking residuals 
+plot(residuals(mgaw4) ~ predict(mgaw4, type = "response"))  # not fantastic but ok  
+
+## Interpreting my model
+# grazing 
+-0.0008013/sd(moss$grazing_m)  # = -9.512343e-05 (OLD RESULTS)
+# ndvi
+0.0143680/sd(richness_site2$slope_deg)    # = 0.003260125
+# wetness
+-0.0170634/sd(richness_site2$wetness)    # = -0.0009621821
+
+# comparing to OG model (not scaled)
+mgaw4_og <- lm(log(coverage_perc) ~ grazing_m * aspect + wetness * aspect, data = moss_cov)
+summary(mgaw4_og)
+  # grazing NORTH: exp(-0.01779)
+  # grazing SOUTH: exp(0.05164)
+  # wetness NORTH: exp(-0.01010)
+  # wetness SOUTH: exp(0.04278)
+
+
+## SHRUB
+sgnw <- lm(coverage_perc ~ grazing_m_s + ndvi_s + wetness_s, data = shrub_cov)
+summary(sgnw)      ## USE THIS MODEL'S RESULTS ##
+  # int: 57.042
+  # grazing_s: -1.308, p = 0.640329 (not significant)
+  # ndvi_s: 11.162, p = 0.000513 (SIGNIFICANT)
+  # wetness_s: -12.202, p = 0.000244 (SIGNIFICANT)
+# adjusted R2 = 0.455
+
+## Interpreting my model
+# grazing N
+0.02091/sd(shrub$grazing_m)  # = 0.002482255 (OLD RESULTS)
+# grazing S
+-0.03547/sd(shrub$grazing_m)  # = -0.004210693
+# wetness
+-0.03327/sd(shrub$wetness)    # = -0.00187605
+
+# comparing to OG model (not scaled)
+sgnw_og <- lm(coverage_perc ~ grazing_m + ndvi + wetness, data = shrub_cov)
+summary(sgnw_og)
+  # grazing = -0.1546
+  # ndvi = 190.3438
+  # wetness = -0.6609
+
+
+## GRASS
+gganw <- lm(log(coverage_perc) ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = grass_cov)
+summary(gganw)      ## USE THIS MODEL'S RESULTS ##
+  # aspect NORTH: exp(1.6882)
+  # aspect SOUTH: exp(-0.6586), p = 0.036499 (SIGNIFICANT)
+  # grazing: exp(0.2462), p = 0.123275 (not significant)
+  # ndvi: exp(0.5695), p = 0.001586 (SIGNIFICANT)
+  # wetnes: exp(0.6174), p = 0.000829 (SIGNIFICANT)
+# adjusted R2 = 0.416
+
+## Interpreting my model
+# grazing N
+-0.010821/sd(grass$grazing_m)  # = -0.001284576 (OLD RESULTS)
+# grazing S
+0.031877/sd(grass$grazing_m)  # = 0.003784163
+# wetness N
+0.054734/sd(grass$wetness)    # = 0.003086376
+# wetness S
+-0.039613/sd(grass$wetness)    # = -0.002233724
+
+# comparing to OG model (not scaled)
+gganw_og <- lm(log(coverage_perc) ~ grazing_m + aspect + ndvi + wetness, data = grass_cov)
+summary(gganw_og)
+  # grazing = exp(0.029111)
+  # ndvi = exp(9.710945)
+  # wetness = exp(0.033442)
+# very similar 
+
+
+## HERB
+hgw <- glm(coverage_perc ~ grazing_m_s + wetness_s, family = Gamma(link = "log"), data = herb_cov)
+summary(hgw)      ## USE THIS MODEL'S RESULTS ##
+  # int: exp(0.1971)
+  # grazing: exp(0.1596), p = 0.436236 (not significant)
+  # wetness: exp(0.7992), p = 0.000727 (SIGNIFICANT)
+# adjusted R2 = 0.3831
+
+## Interpreting my model
+# grazing 
+0.001533/sd(herb$grazing_m)  # = 0.0001801942
+# wetness 
+0.042715/sd(herb$wetness)    # = 0.002353859
+
+# comparing to OG model (not scaled)
+hgw_og <- glm(coverage_perc ~ grazing_m + wetness, family = Gamma(link = "log"), data = herb_cov)
+summary(hgw_og)
+  # grazing = exp(0.01887)
+  # wetness = exp(0.04329)
+# very similar 
+
+# calculating McFadden's R2 
+with(summary(hgw), 1 - deviance/null.deviance)  # R2 = 0.1943393
+
+
 #### Landscape Models ----
 ### Grazing ~ Landscape ----
 hist(plot_grazing$grazing_m)  # a bit skewed
@@ -1554,6 +2184,8 @@ t.test(wetness ~ aspect, data = gisvar)
   # t = -1.5389, df = 69.931, p-value = 0.1283
   # N = 11.41176, S = 17.00000 
 
+gisvar %>% group_by(aspect) %>% summarize(avgwet = mean(wetness),
+                                          se = std.error(wetness))
 # range
 summary(ifelse(richness_site2$aspect == "N", richness_site2$wetness, NA))
   # min = 0.93, max = 38.33, mean = 11.42 
@@ -1566,6 +2198,8 @@ t.test(slope_deg ~ aspect, data = gisvar)
   # t = -1.7695, df = 59.86, p-value = 0.0819
   # N = 5.543193, S = 7.058317 
 
+gisvar %>% group_by(aspect) %>% summarize(avgslope = mean(slope_deg),
+                                          se = std.error(slope_deg))
 # range
 summary(ifelse(richness_site2$aspect == "N", richness_site2$slope_deg, NA))
   # min = 1.682, max = 8.354, mean = 5.542 
@@ -1577,6 +2211,9 @@ t.test(ndvi ~ aspect, data = gisvar)
   # t = -1.9925, df = 99.937, p-value = 0.04904
   # N = 0.09076183, S = 0.11356689 
 
+gisvar %>% group_by(aspect) %>% summarize(avgndvi = mean(ndvi),
+                                          se = std.error(ndvi))
+# range
 summary(ifelse(richness_site2$aspect == "N", richness_site2$ndvi, NA))
 summary(ifelse(richness_site2$aspect == "S", richness_site2$ndvi, NA))
 
@@ -2035,26 +2672,34 @@ summary(indsp2)
 
 
 # . ----
-#### Autocorrelation Test ----
-## Seeing if my sites that are closer together are more similar than those further apart
-sites_m <- sites %>% filter(plot == 1) %>% dplyr::select(x_coord, y_coord)
-            
-# creating a geographic df with Haversine distance 
-sites_d <- distm(sites_m, fun = distHaversine)
-sites_dist <- as.dist(sites_d)
+#### Climate Info ----
+temp <- read.csv("Data/smhi_Hemavan-GierevartoA.csv")
+str(temp)
+summary(temp)
 
-# creating relative abundance df with Bray-Curtis distance
-sp_dist <- vegdist(sp_matrix2, method = "bray")
+temp <- temp %>% 
+          mutate(Datum = as.POSIXct(Datum, format = "%Y-%m-%d")) %>% 
+          mutate(month = format(Datum,"%m")) %>% 
+          mutate(year = format(Datum,"%Y")) %>% 
+          mutate(month = as.numeric(month)) %>% 
+          mutate(year = as.numeric(year))
+str(temp)
+temp <- temp %>% 
+          filter(!year < 1990) %>% 
+          filter(month == 5:9) 
 
+temp_sum <- temp %>% 
+              group_by(month) %>% 
+              summarize(avgT = mean(Lufttemperatur))
+temp_sum %>% summarize(mean(avgT))  # 6.86˚C
 
-# rel abundance vs location 
-mantel_sp <- mantel(sp_dist, sites_dist, method = "spearman", permutations = 9999, na.rm = TRUE)
-mantel_sp
-  # not spatially autocorrelated
-  # used the Spearman method (non-parametric)
-    # p = 0.2268 (not significant)
-    # Mantel statistic r = 0.04687
+temp_change <- temp %>% 
+                  group_by(year) %>% 
+                  summarize(avgT = mean(Lufttemperatur))
 
+summary(lm(avgT ~ year, data = temp_change))   # 0.0513 
+
+shapiro.test(resid(lm(avgT ~ year, data = temp_change)))
 
 
 # . ----
@@ -2936,3 +3581,25 @@ nmds4
 
 
 ## Standardized variables
+
+#### Autocorrelation Test ----
+## Seeing if my sites that are closer together are more similar than those further apart
+sites_m <- sites %>% filter(plot == 1) %>% dplyr::select(x_coord, y_coord)
+
+# creating a geographic df with Haversine distance 
+sites_d <- distm(sites_m, fun = distHaversine)
+sites_dist <- as.dist(sites_d)
+
+# creating relative abundance df with Bray-Curtis distance
+sp_dist <- vegdist(sp_matrix2, method = "bray")
+
+
+# rel abundance vs location 
+mantel_sp <- mantel(sp_dist, sites_dist, method = "spearman", permutations = 9999, na.rm = TRUE)
+mantel_sp
+# not spatially autocorrelated
+# used the Spearman method (non-parametric)
+# p = 0.2268 (not significant)
+# Mantel statistic r = 0.04687
+
+

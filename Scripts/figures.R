@@ -427,7 +427,41 @@ rich_wet_data <- left_join(richness_site2, rgawn_wet)
 ggsave("Figures/richness_4figs.png", plot = rich_grid2, width = 6, height = 6.1, unit = "in")
 
 
-#### Richness Proportion Plot ----
+#### Richness Proportion Plots ----
+## Overview boxplot ----
+richness_site <- richness_site %>% 
+                    mutate(aspect2 = case_when(aspect == "N" ~ "North",
+                                               aspect == "S" ~ "South")) %>% 
+                    mutate(sp_group = factor(sp_group, 
+                                             levels = c("grass", "lichen", "shrub", "moss", "herb"),
+                                             labels = c("Graminoids", "Lichens", "Shrubs", "Bryophytes", 
+                                                        "Forbs")))
+
+(rich_box <- ggplot(richness_site, aes(x = sp_group, y = rich_propT)) +   
+                geom_boxplot(alpha = 0.6) +
+                theme_thesis + 
+                theme(plot.margin = margin(r = 0.5, b = 0.5, t = 0.5, unit = "cm")) + 
+                labs(x = "Plant Group", y = "Relative Species Richness"))
+
+# with aspect 
+(rich_box2 <- ggplot(richness_site, aes(x = sp_group, y = rich_propT)) +   
+                geom_boxplot(aes(fill = aspect2, color = aspect2), alpha = 0.6) +
+                theme_thesis + 
+                theme(plot.margin = margin(r = 0.5, b = 0.05, t = 0.5, l = 0.05, unit = "cm")) + 
+                labs(x = "Plant Group", y = "Relative Species Richness") +
+                scale_color_manual(values = c("#FF4B0A", "#FFA033"),
+                                   labels = c("North", "South"),
+                                   name = "Aspect") +
+                scale_shape_manual(values = c(21, 22),
+                                   labels = c("North", "South"),
+                                   name = "Aspect") +
+                scale_fill_manual(values = c("#FF4B0A", "#FFA033"),
+                                  labels = c("North", "South"),
+                                  name = "Aspect"))
+
+ggsave("Figures/richprop_boxplot.png", plot = rich_box2, width = 5.3, height = 3.8, units = "in")
+
+
 ### Richness proportion ~ grazing ----
 ## Models ----
 # lichen
@@ -510,7 +544,8 @@ stripcol2 <- strip_themed(background_x = elem_list_rect(fill = c("#93AFDC", "#E2
                   facet_wrap2(~sp_group, scales = "free_y", strip = stripcol2) +
                   theme(legend.position = c(1, 0),
                         legend.justification = c(1, 0),
-                        strip.text = element_text(face = "bold")) +
+                        strip.text = element_text(face = "bold"),
+                        panel.spacing = unit(2, "lines")) +
                #         strip.background = element_rect(linewidth = 2, fill = "grey92")) +
                   scale_color_manual(values = c("#FF4B0A", "#FFA033"),
                                      labels = c("North", "South"),
@@ -522,7 +557,10 @@ stripcol2 <- strip_themed(background_x = elem_list_rect(fill = c("#93AFDC", "#E2
                                     labels = c("North", "South"),
                                     name = "Aspect"))
 
-ggsave("Figures/sp_prop2.png", plot = prop_plot2, width = 6.5, height = 4.8, units = "in")
+# JUST DO IT IN ILLUSTRATOR 
+
+ggsave("Figures/sp_prop2.png", plot = prop_plot2, width = 7, height = 4.8, units = "in")
+
 
 
 ### Richness proportion ~ NDVI + wetness ----
@@ -821,7 +859,7 @@ coverage_site <- coverage_site %>%
                                              levels = c("grass", "lichen", "shrub", "moss", "herb"),
                                              labels = c("Graminoids", "Lichens", "Shrubs", "Bryophytes", 
                                                         "Forbs")))
-# Boxplot 
+## Boxplot 
 (cov_box <- ggplot(coverage_site, aes(x = aspect2, y = coverage_perc)) +   
               geom_boxplot(aes(fill = sp_group, color = sp_group), alpha = 0.6) +
               theme_thesis + 
@@ -831,14 +869,30 @@ coverage_site <- coverage_site %>%
                                                      "#524B49"),
                                                      labels = c("Graminoids", "Lichens", "Shrubs", 
                                                                 "Bryophytes", "Forbs"),
-                                 name = "Species Group") +
+                                 name = "Plant Group") +
               scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
                                                     "#524B49"),
                                                     labels = c("Graminoids", "Lichens", "Shrubs", 
                                                                "Bryophytes", "Forbs"),
-                                name = "Species Group"))
+                                name = "Plant Group"))
 
-ggsave("Figures/coverage_boxplot.png", plot = cov_box, width = 5.3, height = 3.8, units = "in")
+# by aspect
+(cov_box2 <- ggplot(coverage_site, aes(x = sp_group, y = coverage_perc)) +   
+                geom_boxplot(aes(fill = aspect2, color = aspect2), alpha = 0.6) +
+                theme_thesis + 
+                theme(plot.margin = margin(l = 0.5, b = 0.05, t = 0.5, r = 0.05, unit = "cm")) + 
+                labs(x = "Plant Group", y = "Coverage (%)") +
+                scale_color_manual(values = c("#FF4B0A", "#FFA033"),
+                                   labels = c("North", "South"),
+                                   name = "Aspect") +
+                scale_shape_manual(values = c(21, 22),
+                                   labels = c("North", "South"),
+                                   name = "Aspect") +
+                scale_fill_manual(values = c("#FF4B0A", "#FFA033"),
+                                  labels = c("North", "South"),
+                                  name = "Aspect"))
+?geom_signif
+# ggsave("Figures/coverage_boxplot.png", plot = cov_box, width = 5.3, height = 3.8, units = "in")
 
 ## Coverage ~ Grazing + NDVI + Wetness + Slope ----
 # Grazing 
@@ -847,17 +901,18 @@ ggsave("Figures/coverage_boxplot.png", plot = cov_box, width = 5.3, height = 3.8
                             alpha = 0.1) +
                 labs(x = "Grazing (min)", y = "Coverage (%)") +
                 theme_thesis + 
+                theme(plot.margin = margin(r = 0.5, b = 0.5, t = 0.5, unit = "cm")) + 
                 facet_wrap(~aspect2) +
                 scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
                                                        "#524B49"),
                                                        labels = c("Graminoids", "Lichens", "Shrubs", 
                                                                   "Bryophytes", "Forbs"),
-                                   name = "Species Group") +
+                                   name = "Plant Group") +
                 scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
                                                       "#524B49"),
                                                       labels = c("Graminoids", "Lichens", "Shrubs", 
                                                                  "Bryophytes", "Forbs"),
-                                  name = "Species Group"))
+                                  name = "Plant Group"))
 
 # NDVI
 (cov_ndvi <- ggplot(coverage_site, aes(x = ndvi, y = coverage_perc)) +  
@@ -869,16 +924,17 @@ ggsave("Figures/coverage_boxplot.png", plot = cov_box, width = 5.3, height = 3.8
             #    theme(plot.margin = margin(r = 0.5, b = 0.5, l = 0.05, t = 0.05, unit = "cm")) +
                                                   # for 'cov_grid'
                 facet_wrap(~aspect2) +
+                scale_x_continuous(breaks = c(0.0, 0.1, 0.2)) +
                 scale_color_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
                                                        "#524B49"),
                                                        labels = c("Graminoids", "Lichens", "Shrubs", 
                                                                   "Bryophytes", "Forbs"),
-                                   name = "Species Group") +
+                                   name = "Plant Group") +
                 scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
                                                       "#524B49"),
                                                       labels = c("Graminoids", "Lichens", "Shrubs", 
                                                                  "Bryophytes", "Forbs"),
-                                  name = "Species Group"))
+                                  name = "Plant Group"))
 
 # Wetness
 (cov_wet <- ggplot(coverage_site, aes(x = wetness, y = coverage_perc)) +  
@@ -894,12 +950,12 @@ ggsave("Figures/coverage_boxplot.png", plot = cov_box, width = 5.3, height = 3.8
                                                      "#524B49"),
                                                      labels = c("Graminoids", "Lichens", "Shrubs", 
                                                                 "Bryophytes", "Forbs"),
-                                 name = "Species Group") +
+                                 name = "Plant Group") +
               scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
                                                     "#524B49"),
                                                     labels = c("Graminoids", "Lichens", "Shrubs", 
                                                                "Bryophytes", "Forbs"),
-                                name = "Species Group"))
+                                name = "Plant Group"))
 
 # Slope 
 (cov_slope <- ggplot(coverage_site, aes(x = slope_deg, y = coverage_perc)) +  
@@ -916,25 +972,30 @@ ggsave("Figures/coverage_boxplot.png", plot = cov_box, width = 5.3, height = 3.8
                                                        "#524B49"),
                                                        labels = c("Graminoids", "Lichens", "Shrubs", 
                                                                   "Bryophytes", "Forbs"),
-                                   name = "Species Group") +
+                                   name = "Plant Group") +
                 scale_fill_manual(values = c("#3A69B4", "#BFBF88", "#867441", "#73A6E7", 
                                                       "#524B49"),
                                                       labels = c("Graminoids", "Lichens", "Shrubs", 
                                                                  "Bryophytes", "Forbs"),
-                                  name = "Species Group"))
+                                  name = "Plant Group"))
 
 ## Combined plots ----
-(cov_grid <- ggarrange(ggarrange(cov_ndvi, cov_wet, ncol = 2, legend = F, labels = c("A", "B")), 
-                       nrow = 2, heights = c(1, 1),
-                       ggarrange(cov_slope, labels = c("C"))))
+# with grazing, no boxplot 
+(cov_grid <- ggarrange(cov_graze, cov_ndvi, cov_wet, cov_slope,
+                       ncol = 2, nrow = 2, common.legend = T, labels = c("A", "B", "C", "D"), 
+                       heights = c(1, 1)))
 
 # with boxplot 
 (cov_grid2 <- ggarrange(cov_box, cov_ndvi, cov_wet, cov_slope,
                         ncol = 2, nrow = 2, common.legend = T, labels = c("A", "B", "C", "D"), 
                         heights = c(1, 1)))
 
-# ggsave("Figures/coverage.png", plot = cov_grid, width = 6, height = 6, units = "in")
-ggsave("Figures/coverage_full.png", plot = cov_grid2, width = 6, height = 6, units = "in")
+# with coverage boxplot and richness proportion boxplot
+(cov_rich <- ggarrange(rich_box2, cov_box2, ncol = 2, common.legend = T, labels = c("A", "B")))
+
+ggsave("Figures/coverage.png", plot = cov_grid, width = 6, height = 6, units = "in")
+# ggsave("Figures/coverage_full.png", plot = cov_grid2, width = 6, height = 6, units = "in")
+ggsave("Figures/coverage_richprop.png", plot = cov_rich, width = 8, height = 4.8, units = "in")
 
 
 # . ----
