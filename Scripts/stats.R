@@ -642,6 +642,8 @@ ggcorr(richness_site, label = T)
     # soil depth is a very low resolution, so maybe exclude this from models
   # slope and wetness = correlate -0.5, but is less than the threshold for correlation (usually 0.7)
 
+
+
 ### Richness ~ Grazing (Site) ----
 # only have 34 datapoints due to averaging across plots per site = max 3-4 parameters per model
 
@@ -2176,6 +2178,15 @@ with(summary(gw_glm2), 1 - deviance/null.deviance)  # R2 = 0.09118
 
 # . ----
 #### Other Basic Statistics ----
+## Grazing lengths
+summary(richness_site$grazing_m)
+richness %>% filter(wetness > 60) %>% dplyr::select(grazing_m)  # max = 6.1864900
+wet <- richness %>% filter(wetness > 60) %>% group_by(plot_nr) %>% dplyr::select(grazing_m) %>% 
+          summarize(avg = mean(grazing_m))
+wet %>% ungroup() %>% summarize(avg2 = mean(avg),
+                                med = median(avg))
+
+
 aspect <- sites %>% dplyr::select(plot_nr, aspect)
 gisvar <- left_join(gisvar, aspect)
 
