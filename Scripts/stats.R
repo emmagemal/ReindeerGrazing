@@ -1161,9 +1161,13 @@ summary(lgan_log3)      ## USE THIS MODEL'S RESULTS ##
   # aspect NORTH (intercept): exp(-1.27890) ± exp(0.04789)
   # aspect SOUTH: exp(0.09492) ± exp(0.06855), p = 0.0282 (SIGNIFICANT)
   # grazing_s NORTH: exp(0.01118) ± exp(0.04814), p = 0.8180 (not significant) 
-  # grazing_s*aspect SOUTH: exp(-0.12673) ± exp(0.06815), p = 0.0724 (not significant)
+  # grazing_s*aspect SOUTH: exp(-0.12710) ± exp(0.06815), p = 0.0724 (not significant)
   # ndvi_s: exp(-0.17420) ± exp(0.03783), p = 7.59e-05 (SIGNFICANT)    
 # adjusted R2 = 0.3912 
+
+# % change:
+  # ((exp(estimate))-1)*100
+
 
 # checking residuals 
 plot(residuals(lgan_log3) ~ predict(lgan_log3, type = "response"))  # looks good 
@@ -1179,6 +1183,7 @@ plot(residuals(lgan_log3) ~ predict(lgan_log3, type = "response"))  # looks good
 # comparing to OG model (not scaled)
 lgan_log3_og <- lm(log(rich_propT) ~ grazing_m*aspect + ndvi, data = lichen)
 summary(lgan_log3_og)
+  # aspectS = 0.246526
   # grazing N = 0.001321
   # grazing S = -0.015026
   # NDVI = -2.970634
@@ -1213,6 +1218,15 @@ summary(mganw_og)
   # wetness = -9.243e-04
 # very similar 
 
+# log relative richness to help obtain % change
+moss_test <- lm(log(rich_propT) ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = moss)
+summary(moss_test)
+
+moss_test2 <- lm(log(rich_propT) ~ grazing_m + aspect + ndvi + wetness, data = moss)
+summary(moss_test2)
+
+# interpretation: (exp(estimate)-1)*100
+
 
 # SHRUB = lm(rich_propT ~ grazing_m_s*aspect + wetness_s)
 summary(sgaw3)      ## USE THIS MODEL'S RESULTS ##
@@ -1238,6 +1252,15 @@ summary(sgaw3_og)
   # grazing S = -0.0041934
   # wetness = -0.0018021
 # very similar 
+
+# log relative richness to help obtain % change
+shrub_test <- lm(log(rich_propT) ~ grazing_m_s*aspect + wetness_s, data = shrub)
+summary(shrub_test)
+
+shrub_test2 <- lm(log(rich_propT) ~ grazing_m*aspect + wetness, data = shrub)
+summary(shrub_test2)
+
+# interpretation: (exp(estimate)-1)*100
 
 
 # GRASS = lm(rich_propT ~ grazing_m_s*aspect + wetness_s*aspect)
@@ -1269,6 +1292,15 @@ summary(ggaw4_og)
   # wetness S = -0.0021458
 # very similar 
 
+# log relative richness to help obtain % change
+grass_test <- lm(log(rich_propT) ~ grazing_m_s*aspect + wetness_s*aspect,  data = grass)
+summary(grass_test)
+
+grass_test2 <- lm(log(rich_propT) ~ grazing_m*aspect + wetness*aspect, data = grass)
+summary(grass_test2)
+
+# interpretation: (exp(estimate)-1)*100
+
 
 # HERB = lm(rich_propT ~ grazing_m_s + aspect + wetness_s)
 summary(hgaw)      ## USE THIS MODEL'S RESULTS ##
@@ -1290,6 +1322,16 @@ summary(hgaw_og)
   # grazing = 0.0001813
   # wetness = 0.0023138
 # very similar 
+
+# log relative richness to help obtain % change
+herb_test <- lm(log(rich_propT) ~ grazing_m_s + aspect + wetness_s, data = herb)
+summary(herb_test)
+
+herb_test2 <- lm(log(rich_propT) ~ grazing_m + aspect + wetness, data = herb)
+summary(herb_test2)
+
+# interpretation: (exp(estimate)-1)*100
+(exp(0.014193)-1)*100
 
 
 # . ----
