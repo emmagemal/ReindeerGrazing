@@ -1220,6 +1220,8 @@ summary(mganw_og)
 
 # log relative richness to help obtain % change
 moss_test <- lm(log(rich_propT) ~ grazing_m_s + aspect + ndvi_s + wetness_s, data = moss)
+shapiro.test(resid(moss_test))  
+bptest(moss_test)  
 summary(moss_test)
 
 moss_test2 <- lm(log(rich_propT) ~ grazing_m + aspect + ndvi + wetness, data = moss)
@@ -1255,6 +1257,8 @@ summary(sgaw3_og)
 
 # log relative richness to help obtain % change
 shrub_test <- lm(log(rich_propT) ~ grazing_m_s*aspect + wetness_s, data = shrub)
+shapiro.test(resid(shrub_test))  
+bptest(shrub_test)  
 summary(shrub_test)
 
 shrub_test2 <- lm(log(rich_propT) ~ grazing_m*aspect + wetness, data = shrub)
@@ -1294,6 +1298,8 @@ summary(ggaw4_og)
 
 # log relative richness to help obtain % change
 grass_test <- lm(log(rich_propT) ~ grazing_m_s*aspect + wetness_s*aspect,  data = grass)
+shapiro.test(resid(grass_test))  
+bptest(grass_test)  
 summary(grass_test)
 
 grass_test2 <- lm(log(rich_propT) ~ grazing_m*aspect + wetness*aspect, data = grass)
@@ -1325,6 +1331,8 @@ summary(hgaw_og)
 
 # log relative richness to help obtain % change
 herb_test <- lm(log(rich_propT) ~ grazing_m_s + aspect + wetness_s, data = herb)
+shapiro.test(resid(herb_test))  
+bptest(herb_test)  
 summary(herb_test)
 
 herb_test2 <- lm(log(rich_propT) ~ grazing_m + aspect + wetness, data = herb)
