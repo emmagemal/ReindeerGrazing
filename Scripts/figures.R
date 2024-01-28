@@ -211,25 +211,25 @@ plot_grazing <- plot_grazing %>%
 
 
 ### Creating summary dataframes
-coverage_site <- coverage %>% 
-                  group_by(site_nr) %>% 
-                  mutate(ndvi = mean(ndvi),
-                         slope_deg = mean(slope_deg),
-                         wetness = mean(wetness),
-                         soil_depth = mean(soil_depth)) %>% 
-                  group_by(site_nr, sp_group, aspect) %>% 
-                  summarize(coverage_cm2 = mean(coverage_cm2),
-                            coverage_perc = mean(coverage_perc),
-                            coverage_prop = coverage_perc/100,
-                            ndvi = mean(ndvi),
-                            slope_deg = mean(slope_deg),
-                            wetness = mean(wetness),
-                            soil_depth = mean(soil_depth),
-                            grazing_s = mean(grazing_s),
-                            grazing_m = mean(grazing_m))
+#coverage_site <- coverage %>% 
+ #                 group_by(site_nr) %>% 
+  #                mutate(ndvi = mean(ndvi),
+   #                      slope_deg = mean(slope_deg),
+    #                     wetness = mean(wetness),
+     #                    soil_depth = mean(soil_depth)) %>% 
+      #            group_by(site_nr, sp_group, aspect) %>% 
+       #           summarize(coverage_cm2 = mean(coverage_cm2),
+        #                    coverage_perc = mean(coverage_perc),
+         #                   coverage_prop = coverage_perc/100,
+          #                  ndvi = mean(ndvi),
+           #                 slope_deg = mean(slope_deg),
+            #                wetness = mean(wetness),
+             #               soil_depth = mean(soil_depth),
+              #              grazing_s = mean(grazing_s),
+               #             grazing_m = mean(grazing_m))
 
-coverage_site <- as.data.frame(coverage_site)
-str(coverage_site)
+#coverage_site <- as.data.frame(coverage_site)
+#str(coverage_site)
 
 richness_site <- richness %>% 
                     group_by(site_nr) %>% 
@@ -304,7 +304,7 @@ rich_sum <- plots %>%
                 scale_fill_manual(values = c("#73A6E7", "#867441", "#3A69B4", "#BFBF88", "#524B49"),
                                   name = "Species Group"))
 
-ggsave("Figures/piechart.png", plot = pie_plot, width = 5, height = 5, units = "in")
+#ggsave("Figures/piechart.png", plot = pie_plot, width = 5, height = 5, units = "in")
 
 
 # . ----
@@ -416,17 +416,18 @@ rich_wet_data <- left_join(richness_site2, rgawn_wet)
 
 ## Combined plots ----
 (rich_grid <- ggarrange(nrow = 2, heights = c(1,1),
-                        ggarrange(rich_plot, NULL, widths = c(3,0.2), labels = c("A", "")),
-                        ggarrange(rich_plot2, rich_plot3, legend = F, labels = c("B", "C"),
+                        ggarrange(rich_plot, NULL, widths = c(3,0.2), labels = c("a", "")),
+                        ggarrange(rich_plot2, rich_plot3, legend = F, labels = c("b", "c"),
                                   widths = c(1, 1))))
 
 # with boxplot (USE THIS ONE)
 (rich_grid2 <- ggarrange(nrow = 2, heights = c(1.15,1),
-                         ggarrange(rich_plot, rich_plot4, widths = c(1, 1), labels = c("A", "B"),
+                         ggarrange(rich_plot, rich_plot4, widths = c(1, 1), labels = c("a", "b"),
+                                   font.label = list(size = 18),
                                    common.legend = T),
-                         ggarrange(rich_plot3, rich_plot2, legend = F, labels = c("C", "D"),
+                         ggarrange(rich_plot3, rich_plot2, legend = F, labels = c("c", "d"),
+                                   font.label = list(size = 18), 
                                    widths = c(1, 1))))
-
 
 # ggsave("Figures/richness_plots.png", plot = rich_grid, width = 6, height = 5.8, unit = "in")
 ggsave("Figures/richness_4figs.png", plot = rich_grid2, width = 6, height = 6.1, unit = "in")
@@ -464,13 +465,13 @@ richness_site <- richness_site %>%
                                   labels = c("North", "South"),
                                   name = "Aspect"))
 
-ggsave("Figures/richprop_boxplot.png", plot = rich_box2, width = 5.3, height = 3.8, units = "in")
+#ggsave("Figures/richprop_boxplot.png", plot = rich_box2, width = 5.3, height = 3.8, units = "in")
 
 
 ### Richness proportion ~ grazing ----
 ## Models ----
 # lichen
-lichen <- richness_site %>% filter(sp_group == "lichen")
+lichen <- richness_site %>% filter(sp_group == "Lichens")
 lgan_log3_og <- lm(log(rich_propT) ~ grazing_m*aspect + ndvi, data = lichen)
 
 lgan_pred <- ggpredict(lgan_log3_og, terms = c("grazing_m", "aspect"), back.transform = T) %>% 
@@ -478,7 +479,7 @@ lgan_pred <- ggpredict(lgan_log3_og, terms = c("grazing_m", "aspect"), back.tran
 lichen_lgan <- left_join(lichen, lgan_pred)
 
 # moss
-moss <- richness_site %>% filter(sp_group == "moss")
+moss <- richness_site %>% filter(sp_group == "Bryophytes")
 mganw_og <- lm(rich_propT ~ grazing_m + aspect + ndvi + wetness, data = moss)
 
 mganw_pred <- ggpredict(mganw_og, terms = c("grazing_m", "aspect")) %>% 
@@ -486,7 +487,7 @@ mganw_pred <- ggpredict(mganw_og, terms = c("grazing_m", "aspect")) %>%
 moss_mganw <- left_join(moss, mganw_pred)
 
 # shrub
-shrub <- richness_site %>% filter(sp_group == "shrub")
+shrub <- richness_site %>% filter(sp_group == "Shrubs")
 sgaw3_og <- lm(rich_propT ~ grazing_m*aspect + wetness, data = shrub)
 
 sgaw3_pred <- ggpredict(sgaw3_og, terms = c("grazing_m", "aspect")) %>% 
@@ -494,7 +495,7 @@ sgaw3_pred <- ggpredict(sgaw3_og, terms = c("grazing_m", "aspect")) %>%
 shrub_sgaw3 <- left_join(shrub, sgaw3_pred)
 
 # grass
-grass <- richness_site %>% filter(sp_group == "grass")
+grass <- richness_site %>% filter(sp_group == "Graminoids")
 ggaw4_og <- lm(rich_propT ~ grazing_m*aspect + wetness*aspect, data = grass)
 
 ggaw4_pred <- ggpredict(ggaw4_og, terms = c("grazing_m", "aspect")) %>% 
@@ -502,7 +503,7 @@ ggaw4_pred <- ggpredict(ggaw4_og, terms = c("grazing_m", "aspect")) %>%
 grass_ggaw4 <- left_join(grass, ggaw4_pred)
 
 # herb
-herb <- richness_site %>% filter(sp_group == "herb")
+herb <- richness_site %>% filter(sp_group == "Forbs")
 hgaw_og <- lm(rich_propT ~ grazing_m + aspect + wetness, data = herb)
 
 hgaw_pred <- ggpredict(hgaw_og, terms = c("grazing_m", "aspect")) %>% 
@@ -527,12 +528,6 @@ groups <- full_join(groups, herb_hgaw)
 
 
 # with only sp group facetted (this is better than above)
-groups <- groups %>% 
-            mutate(sp_group = factor(sp_group, 
-                                     levels = c("grass", "lichen", "shrub", "moss", "herb"),
-                                     labels = c("Graminoids", "Lichens", "Shrubs", "Bryophytes", 
-                                                "Forbs")))
-
 stripcol <- strip_themed(background_x = elem_list_rect(color = c("#3A69B4", "#BFBF88", "#867441", 
                                                                       "#73A6E7", "#524B49"),
                                                        fill = NA))
@@ -603,20 +598,10 @@ herb_hgaw2 <- left_join(herb, hgaw_pred2)
 # combined
 groups_ndvi <- full_join(lichen_lgan2, moss_mganw2)
 
-groups_wetness <- full_join(moss_mgws23, shrub_sgaw32)
+groups_wetness <- full_join(moss_mganw3, shrub_sgaw32)
 groups_wetness <- full_join(groups_wetness, grass_ggaw42)
 groups_wetness <- full_join(groups_wetness, herb_hgaw2)
 
-groups_ndvi <- groups_ndvi %>% 
-                  mutate(sp_group = factor(sp_group, 
-                                           levels = c("grass", "lichen", "shrub", "moss", "herb"),
-                                           labels = c("Graminoids", "Lichens", "Shrubs", "Bryophytes", 
-                                                      "Forbs")))
-groups_wetness <- groups_wetness %>% 
-                    mutate(sp_group = factor(sp_group, 
-                                             levels = c("grass", "lichen", "shrub", "moss", "herb"),
-                                             labels = c("Graminoids", "Lichens", "Shrubs", "Bryophytes", 
-                                                        "Forbs")))
 ## Plots ----
 # NDVI
 stripcoln <- strip_themed(background_x = elem_list_rect(fill = c("#E2E2CA", "#DCE9F9")))
@@ -675,7 +660,8 @@ stripcolw <- strip_themed(background_x = elem_list_rect(fill = c("#93AFDC", "#C3
 
 ## Combined plots
 (abiotic_grid <- ggarrange(nrow = 1, ncol = 2, widths = c(1.1,2), common.legend = T,
-                           prop_plot4, prop_plot5, labels = c("A", "B")))
+                           prop_plot4, prop_plot5, labels = c("a", "b"),
+                           font.label = list(size = 18)))
 
 ggsave("Figures/sp_prop_abiotic.png", plot = abiotic_grid, width = 6.5, height = 5, units = "in")
 
@@ -831,9 +817,9 @@ richness_site <- richness_site %>%
 
 
 ## Combined plots ----
-(group_grid <- ggarrange(group_plot, nrow = 2, ncol = 1, labels = c("A"), heights = c(1, 1),
+(group_grid <- ggarrange(group_plot, nrow = 2, ncol = 1, labels = c("a"), heights = c(1, 1),
                          ggarrange(nrow = 1, ncol = 2, legend = F,
-                                   group_plot5, group_plot3, labels = c("B", "C"))))
+                                   group_plot5, group_plot3, labels = c("b", "c"))))
 
 ggsave("Figures/true_richness.png", plot = group_grid, width = 7, height = 6.5, units = "in")
 
